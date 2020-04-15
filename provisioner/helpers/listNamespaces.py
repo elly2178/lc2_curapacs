@@ -11,12 +11,12 @@ def list_namespaces():
     ret = v1.list_pod_for_all_namespaces(watch=False)
     #Make a temp list to store all the items in the dictionary
     tempList = []
-    for i in ret.items:
+    for pod in ret.items:
         # create a newTemp list to save the appended temp list
         tempList.append({
-            "pod_ip":i.status.pod_ip,
-            "namespace":i.metadata.namespace,
-            "name":i.metadata.name})
+            "pod_ip":pod.status.pod_ip,
+            "namespace":pod.metadata.namespace,
+            "name":pod.metadata.name})
 
         
     # return the jsonify verison of the list
