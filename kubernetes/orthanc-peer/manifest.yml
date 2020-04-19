@@ -1,0 +1,264 @@
+#https://book.orthanc-server.com/faq/scalability.html#scalability-memory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orthanc-postgres
+  namespace: pacsaas-c0100-local
+spec:
+  selector:
+    app: orthanc-postgres
+  ports:
+    - name: orthanc-postgres
+      protocol: TCP
+      port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orthanc-postgres-deployment
+  namespace: pacsaas-c0100-local
+  labels:
+    app: orthanc-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orthanc-postgres
+  template:
+    metadata:
+      labels:
+        app: orthanc-postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: orthanc-postgres
+          image: postgres:9.6
+          env:
+            - name: "POSTGRES_DB"
+              value: "orthanc"
+            - name: "POSTGRES_USER"
+              value: "orthanc"
+            - name: "POSTGRES_PASSWORD"
+              value: "orthanc"
+          volumeMounts:
+            - name: tz-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Zurich
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orthanc-web
+  namespace: pacsaas-c0100-local
+spec:
+  selector:
+    app: orthanc
+  ports:
+    - name: orthanc-web
+      protocol: TCP
+      port: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orthanc-dicom
+  namespace: pacsaas-c0100-local
+spec:
+  selector:
+    app: orthanc
+  ports:
+    - name: orthanc-dicom
+      protocol: TCP
+      port: 4243
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: tcp-services
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+  namespace: ingress-nginx
+data:
+  4243: "pacsaas-c0100-local/orthanc-dicom:4243"
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: c0100-orthanc
+  namespace: pacsaas-c0100-local
+spec:
+  rules:
+  - host: c0100-peer.curapacs.ch
+    http:
+      paths:
+      - backend:
+          serviceName: orthanc-web
+          servicePort: orthanc-web
+        path: /
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-postgresql-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  postgresql.json: |-
+    {
+    "PostgreSQL": {
+    "EnableIndex": true,
+    "EnableStorage": false,
+    "Host": "orthanc-postgres",
+    "Port": 5432,
+    "Database": "orthanc",
+    "Username": "orthanc",
+    "EnableSsl": false,
+    "Password": "orthanc",
+    "Lock": false }
+    }
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-dicom-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  dicom.json: |-
+    {
+    "DicomAet": "ORTHANCPEER",
+    "DicomModalities": { "Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": [ "FINDSCU", "10.42.0.1", 104 ] },
+    "DicomPort": 4243,
+    "DicomScpTimeout": 30,
+    "DicomScuTimeout": 10,
+    "DicomCheckCalledAet": false,
+    "DicomCheckModalityHost": false,
+    "StrictAetComparison": false,
+    "DicomAlwaysAllowEcho": true,
+    "DicomAlwaysAllowStore": true,
+    "UnknownSopClassAccepted": false,
+    "SynchronousCMove": true,
+    "QueryRetrieveSize": 100,
+    "Dictionary": {}
+    }
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-peering-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  peering.json: |-
+    { "OrthancPeers": {"orthanc" : [ "http://c0100-orthanc.curapacs.ch" ] } }
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-remote-access-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  remote-access.json: |-
+    {
+      "RemoteAccessAllowed": true,
+      "AuthenticationEnabled": true,
+      "RegisteredUsers": { "orthanc": "orthanc" }
+    }
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-python-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  python.json: |-
+    {
+      "PythonScript": "/tmp/sample.py"
+    }
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: orthanc-http-config-cm
+  namespace: pacsaas-c0100-local
+data:
+  http.json: |-
+    {
+    "HttpTimeout": 0,
+    "HttpsVerifyPeers": true,
+    "HttpsCACertificates" : "/etc/ssl/certs/ca-certificates.crt",
+    "HttpProxy": "",
+    "HttpPort": 80,
+    "HttpVerbose": false,
+    "KeepAlive": true,
+    "TcpNoDelay": true,
+    "HttpRequestTimeout": 30
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orthanc-deployment
+  labels:
+    app: orthanc
+  namespace: pacsaas-c0100-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orthanc
+  template:
+    metadata:
+      labels:
+        app: orthanc
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: orthanc
+          image: jodogne/orthanc-python:latest
+          command: ["/bin/sh"]
+          args: ["-c","rm -f /etc/orthanc/orthanc.json; sleep 6000; /usr/local/sbin/Orthanc /etc/orthanc"]
+          volumeMounts:
+            - name: orthanc-http-config-vol
+              mountPath: /etc/orthanc/http.json
+              subPath: http.json
+              readOnly: true
+            - name: orthanc-postgresql-config-vol
+              mountPath: /etc/orthanc/postgresql.json
+              subPath: postgresql.json
+              readOnly: true
+            - name: orthanc-dicom-config-vol
+              mountPath: /etc/orthanc/dicom.json
+              subPath: dicom.json
+              readOnly: true
+            - name: orthanc-remote-access-config-vol
+              mountPath: /etc/orthanc/remote-access.json
+              subPath: remote-access.json
+              readOnly: true
+            - name: orthanc-python-config-vol
+              mountPath: /etc/orthanc/python.json
+              subPath: python.json
+              readOnly: true
+            - name: tz-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: orthanc-http-config-vol
+          configMap:
+            name: orthanc-http-config-cm
+        - name: orthanc-postgresql-config-vol
+          configMap:
+            name: orthanc-postgresql-config-cm
+        - name: orthanc-dicom-config-vol
+          configMap:
+            name: orthanc-dicom-config-cm
+        - name: orthanc-remote-access-config-vol
+          configMap:
+            name: orthanc-remote-access-config-cm
+        - name: orthanc-python-config-vol
+          configMap:
+            name: orthanc-python-config-cm
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Zurich
