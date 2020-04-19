@@ -175,6 +175,7 @@ metadata:
 data:
   python.json: |-
     {
+      "Plugins" : [ "/usr/local/share/orthanc/plugins" ],
       "PythonScript": "/mnt/orthanc-python/orthanc-peer/sample.py"
     }
 ---
@@ -224,8 +225,7 @@ spec:
       initContainers:
         - name: init-fetch-python-scripts
           image: alpine
-          command: ['ash', '-c', 'apk update && apk add --no-cache git; git clone -b feature/orthanc_peering \
-                     https://github.com/elly2178/lc2_curapacs.git /mnt/orthanc-python']
+          command: ['ash', '-c', 'apk update && apk add --no-cache git; git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git /mnt/orthanc-python ; chmod 775 /mnt/orthanc-python/orthanc-peer/sample.py']
           volumeMounts:
             - name: orthanc-python-script-vol
               mountPath: /mnt/orthanc-python
