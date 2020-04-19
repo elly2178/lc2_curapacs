@@ -1,0 +1,49 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orthanc-postgres
+  namespace: pacsaas-c0100
+spec:
+  selector:
+    app: orthanc-postgres
+  ports:
+    - name: orthanc-postgres
+      protocol: TCP
+      port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orthanc-postgres-deployment
+  labels:
+    app: orthanc-postgres
+  namespace: pacsaas-c0100
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orthanc-postgres
+  template:
+    metadata:
+      labels:
+        app: orthanc-postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: orthanc-postgres
+          image: postgres:9.6
+          env:
+            - name: "POSTGRES_DB"
+              value: "orthanc"
+            - name: "POSTGRES_USER"
+              value: "orthanc"
+            - name: "POSTGRES_PASSWORD"
+              value: "orthanc"
+          volumeMounts:
+            - name: tz-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Zurich
