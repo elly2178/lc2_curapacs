@@ -35,3 +35,4 @@ ascii_art = """                                         .""--..__
 `-.___,-.      .-.        ___,'        (/    
          `---'`   `'----'`"""
 print(ascii_art)
+print("Georgiana was here")
