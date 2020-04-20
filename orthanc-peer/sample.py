@@ -36,3 +36,13 @@ ascii_art = """                                         .""--..__
          `---'`   `'----'`"""
 print(ascii_art)
 print("Georgiana was here")
+
+try:
+    import orthanc
+except ImportError:
+    print("orthanc module not available")
+
+import sys
+print("-"*55)
+print(sys.path)
+print("-"*55)
