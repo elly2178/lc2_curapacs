@@ -175,7 +175,8 @@ metadata:
 data:
   python.json: |-
     {
-      "PythonScript": "/tmp/sample.py"
+      "Plugins" : [ "/usr/local/share/orthanc/plugins" ],
+      "PythonScript": "/mnt/orthanc-python/orthanc-peer/sample.py"
     }
 ---
 kind: ConfigMap
@@ -215,11 +216,24 @@ spec:
         app: orthanc
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 101
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      initContainers:
+        - name: init-fetch-python-scripts
+          image: alpine
+          command: ['ash', '-c', 'apk update && apk add --no-cache git; git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git /mnt/orthanc-python ; chmod 775 /mnt/orthanc-python/orthanc-peer/sample.py']
+          volumeMounts:
+            - name: orthanc-python-script-vol
+              mountPath: /mnt/orthanc-python
       containers:
         - name: orthanc
           image: jodogne/orthanc-python:latest
           command: ["/bin/sh"]
-          args: ["-c","rm -f /etc/orthanc/orthanc.json; sleep 6000; /usr/local/sbin/Orthanc /etc/orthanc"]
+          args: ["-c","rm -f /etc/orthanc/orthanc.json; /usr/local/sbin/Orthanc /etc/orthanc"]
           volumeMounts:
             - name: orthanc-http-config-vol
               mountPath: /etc/orthanc/http.json
@@ -241,6 +255,8 @@ spec:
               mountPath: /etc/orthanc/python.json
               subPath: python.json
               readOnly: true
+            - name: orthanc-python-script-vol
+              mountPath: /mnt/orthanc-python
             - name: tz-config
               mountPath: /etc/localtime
       volumes:
@@ -259,6 +275,8 @@ spec:
         - name: orthanc-python-config-vol
           configMap:
             name: orthanc-python-config-cm
+        - name: orthanc-python-script-vol
+          emptyDir: {}
         - name: tz-config
           hostPath:
             path: /usr/share/zoneinfo/Europe/Zurich
