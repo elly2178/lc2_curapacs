@@ -1,0 +1,103 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meddream-viewer
+  namespace: pacsaas-c0100
+spec:
+  selector:
+    app: meddream-viewer
+  ports:
+    - name: meddream-viewer
+      protocol: TCP
+      port: 8080
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meddream-application-properties-cm 
+  namespace: pacsaas-c0100
+data:
+  application.properties: |-
+    com.softneta.license.licenseFileLocation=./license
+    server.port=8080
+    logging.file=mdjavacore.log
+    logging.level.com.softneta=INFO
+
+    spring.profiles.include=auth-inmemory,auth-his
+    authentication.inmemory.users[0].userName=orthanc
+    authentication.inmemory.users[0].password=orthanc
+    authorization.users[0].userName=orthanc
+    authorization.users[0].role=EXPORT_ISO,EXPORT_ARCH,FORWARD,REPORT_VIEW,REPORT_UPLOAD,PATIENT_HISTORY,UPLOAD_DICOM_LIBRARY,3D_RENDERING,ADMIN,SEARCH
+    authentication.his.valid-his-params=study
+    authorization.defaultHisPermissions=EXPORT_ISO,EXPORT_ARCH,FORWARD,REPORT_VIEW,REPORT_UPLOAD,PATIENT_HISTORY,UPLOAD_DICOM_LIBRARY,3D_RENDERING,SEARCH
+    authorization.defaultLoginPermissions=EXPORT_ISO,EXPORT_ARCH,FORWARD,REPORT_VIEW,REPORT_UPLOAD,PATIENT_HISTORY,UPLOAD_DICOM_LIBRARY,3D_RENDERING,SEARCH
+    
+    com.softneta.meddream.loginEnabled=true
+    com.softneta.meddream.searchEnabled=true
+    
+    com.softneta.meddream.pacs.configurations[0].type=Orthanc
+    com.softneta.meddream.pacs.configurations[0].id=Orthanc
+    com.softneta.meddream.pacs.configurations[0].baseUrl=http://orthanc-web:8080
+    com.softneta.meddream.pacs.configurations[0].username=orthanc
+    com.softneta.meddream.pacs.configurations[0].password=orthanc
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: c0100-meddream
+  namespace: pacsaas-c0100
+spec:
+  rules:
+  - host: c0100-meddream.curapacs.ch
+    http:
+      paths:
+      - backend:
+          serviceName: meddream-viewer
+          servicePort: meddream-viewer
+        path: /
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meddream-viewer-deployment
+  labels:
+    app: meddream-viewer
+  namespace: pacsaas-c0100
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meddream-viewer
+  template:
+    metadata:
+      labels:
+        app: meddream-viewer
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 101
+      containers:
+        - name: meddream-viewer
+          image: meddream/orthanc-dicom-viewer:7.5.1
+          volumeMounts:
+            - name: meddream-application-properties-vol
+              mountPath: /opt/meddream/application.properties
+              subPath: application.properties
+              readOnly: true
+            - name: meddream-license-vol
+              mountPath: /opt/meddream/license/meddream.lic
+              subPath: meddream.lic
+              readOnly: true
+            - name: tz-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Zurich
+        - name: meddream-application-properties-vol
+          configMap:
+            name: meddream-application-properties-cm
+        - name: meddream-license-vol
+          configMap:
+            name: meddream-license-cm

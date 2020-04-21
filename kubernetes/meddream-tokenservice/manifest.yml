@@ -1,0 +1,91 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tokenservice
+  namespace: pacsaas-c0100
+spec:
+  selector:
+    app: meddream-tokenservice
+  ports:
+    - name: tokenservice
+      protocol: TCP
+      port: 80
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: meddream-tokenservice-application-properties-cm 
+  namespace: pacsaas-c0100
+data:
+  application.properties: |-
+    server.port=80
+    com.softneta.token.one-time-token=false
+    logging.level.root=DEBUG
+    security.generate.ip-white-list=10.21.1.12;10.21.1.13
+    security.validate.ip-white-list=10.21.1.12;10.21.1.13
+    #security.generate.ip-white-list=his
+    #security.validate.ip-white-list=meddream
+    security.user.name=orthanc
+    security.user.password=orthanc
+    management.context-path=/manage 
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: c0100-meddream-tokenservice
+  namespace: pacsaas-c0100
+spec:
+  rules:
+  - host: c0100-meddream-tokenservice.curapacs.ch
+    http:
+      paths:
+      - backend:
+          serviceName: tokenservice
+          servicePort: tokenservice
+        path: /
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meddream-tokenservice-deployment
+  labels:
+    app: meddream-tokenservice
+  namespace: pacsaas-c0100
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: meddream-tokenservice
+  template:
+    metadata:
+      labels:
+        app: meddream-tokenservice
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 101
+      containers:
+        - name: meddream-tokenservice
+          image: meddream/token-service:0.3
+          volumeMounts:
+            - name: meddream-tokenservice-application-properties-vol
+              mountPath: /opt/token/application.properties
+              subPath: application.properties
+              readOnly: true
+            - name: meddream-license-emptydir-vol
+              mountPath: /opt/meddream/license
+            - name: tz-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /usr/share/zoneinfo/Europe/Zurich
+        - name: meddream-tokenservice-application-properties-vol
+          configMap:
+            name: meddream-tokenservice-application-properties-cm
+        - name: meddream-license-vol
+          configMap:
+            name: meddream-license-cm
+        - name: meddream-license-emptydir-vol
+          emptyDir: {}
