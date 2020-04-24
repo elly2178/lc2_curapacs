@@ -61,7 +61,7 @@ print("Transmitting DICOM Images: ")
 exe = "storescu"
 directories = "--scan-directories"
 # host & port ==
-pathRow = "/home/schumi/lc2/testdaten/PATIENT_G"
+pathRow = "/home/schumi/lc2/testdaten/PATIENT_H"
 #pathUltimate = "PATIENT_B"
 cmd2 = " ".join([exe,directories, hostname, port, pathRow])
 print(cmd2)
@@ -75,15 +75,7 @@ def animate():
         sys.stdout.write('\rloading ' + c)
         sys.stdout.flush()
         time.sleep(0.1)
-    sys.stdout.write('\rDone!     ')
-
-#t = threading.Thread(target=animate)
-#t.start()
-
-#long process here
-#time.sleep(10)
-#done = True
-
+    
 # Log Zeiten und Resultat
 startTimePush = time.perf_counter()
  
@@ -111,17 +103,26 @@ else:
 
 print("Time elapsed: ", round(endTimePush - startTimePush,4))
 
-
  # Finding Patients
+print("Finding Patient: ")
  # Initialise the Application Entity
 ae = AE(ae_title='FINDSCU')
+
+# animation
+p = threading.Thread(target=animate)
+p.start()
+time.sleep(10)
+done = True
+
+# Log Zeiten und Resultat
+startTimeFind = time.perf_counter()
 
 # Add a requested presentation context
 ae.add_requested_context(PatientRootQueryRetrieveInformationModelFind)
 
 # Create our Identifier (query) dataset
 ds = Dataset()
-ds.PatientName = 'P*'
+ds.PatientName = 'Fall*'
 ds.QueryRetrieveLevel = 'STUDY'
 
 # Associate with peer AE at IP 127.0.0.1 and port 11112
@@ -144,3 +145,6 @@ if assoc.is_established:
     assoc.release()
 else:
     print('Association rejected, aborted or never connected')
+
+endTimeFind = time.perf_counter()
+print("Time needed to Find the Patient: ", round(endTimeFind - startTimeFind,4))
