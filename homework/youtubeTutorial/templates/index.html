@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+
+{% block head %}
+<title> sOME Title</title>
+{% endblock %}
+
+
+{% block body %}
+<div class="content">
+    <h1> Taks manager</h1>
+    
+
+    <table> 
+        <tr>
+            <th>Task</th>
+            <th>Added</th>
+            <th>Actions</th>
+        </tr>
+        {% for task in tasks %}
+        <tr>
+            <td>{{ task.content }}</td>
+            <!-- Use .date() so you wont get also the time-->
+            <td>{{ task.date_created.date() }}</td>
+            <td>
+                
+                <a href="/delete/{{task.id}}">Delete</a> 
+                <br>
+                <a href="/update/{{task.id}}">Update to db</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+
+    <form action="/"method="POST">
+        <input type="text" name="content"id="content">
+        <input type="submit" value="Add Task">
+</form>
+
+</div>
+{% endblock %} 
