@@ -1,16 +1,14 @@
+import sys
 from flask import Flask
-app = Flask(__name__)
-
-from sys import exit, path
 from os import getcwd
 
-path.append(getcwd())
+sys.path.append(getcwd())
+app = Flask(__name__)
+
+from provisioner.helpers import k8s_config
+v1 = k8s_config.import_kubernetes_config()
+
 from provisioner import run
 
 if __name__ == '__main__':
-    exit(run.main())
-
-
-
-
-
+    sys.exit(run.main())
