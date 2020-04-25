@@ -1,20 +1,12 @@
 '''
 1. curaPACS startet
 // orthanc things: kubectl apply -f orthanc/manifeat.yml
-
-
 4. (not so important) curaPACS-Test lässt sich erfolgreiche Speicherung durch Storage Commitment bestätigen
 
-5. curaPACS-Test versucht mit DICOM C-FIND die gespeicherten Bilder zu suchen
-   5.1 Suche Patient, Suche Studien zu Patient
-   5.2 Log Zeiten und Resultat
 '''
-
-
 # use subprocess to "convert" cmds to py3
 from subprocess import Popen, PIPE
 from sys import argv
-
 import time
 
 # for animation
@@ -22,14 +14,15 @@ import itertools
 import threading
 import sys
 
-# for FInding Patients
+# for Finding Patients
 from pydicom.dataset import Dataset
 from pynetdicom import AE
 from pynetdicom.sop_class import PatientRootQueryRetrieveInformationModelFind
 
-# section 2
+# Connection
 print("Verifying  DICOM connectivity: ")
 utility="echoscu"
+
 try:
     port= argv[2]
 except IndexError:
@@ -41,7 +34,7 @@ except IndexError:
     hostname = "c0100-orthanc.curapacs.ch"
 
 cmd = " ".join([utility,hostname,port])
- 
+
 # gets the current time that is takes for the pc to get a response from the curapacs
 startTime = time.perf_counter()
 
@@ -53,9 +46,10 @@ if p.returncode == 0:
     print("Time elapsed to access target: ", round(endTime - startTime,3)," seconds")
 else:
     print("Unable ot access Hostname " + hostname + "\nPlease check the Hostname spelling or the Port number")
-#print(out.rstrip(), err.rstrip())\
+    # in case of error, exit program 
+    exit(1)
 
-
+print("--"*40)
 #  curaPACS-Test versucht DICOM C-Store mit verschiedenen Testdatensätzen
 print("Transmitting DICOM Images: ")
 exe = "storescu"
@@ -65,6 +59,7 @@ pathRow = "/home/schumi/lc2/testdaten/PATIENT_H"
 #pathUltimate = "PATIENT_B"
 cmd2 = " ".join([exe,directories, hostname, port, pathRow])
 print(cmd2)
+
 
 # animation
 done = False
@@ -86,8 +81,8 @@ endTimePush = time.perf_counter()
 t = threading.Thread(target=animate)
 t.start()
 
-#long process here
-time.sleep(10)
+#long process here -- 4 animation :)
+time.sleep(4)
 done = True
 
 if q.returncode == 0:
@@ -102,6 +97,7 @@ else:
     print("\nVideo has been pushed")
 
 print("Time elapsed: ", round(endTimePush - startTimePush,4))
+print("--"*40)
 
  # Finding Patients
 print("Finding Patient: ")
@@ -109,10 +105,7 @@ print("Finding Patient: ")
 ae = AE(ae_title='FINDSCU')
 
 # animation
-p = threading.Thread(target=animate)
-p.start()
-time.sleep(10)
-done = True
+animate()
 
 # Log Zeiten und Resultat
 startTimeFind = time.perf_counter()
@@ -122,11 +115,12 @@ ae.add_requested_context(PatientRootQueryRetrieveInformationModelFind)
 
 # Create our Identifier (query) dataset
 ds = Dataset()
-ds.PatientName = 'Fall*'
+ds.PatientName = 'P*'
+ds.PatientID = "11788*"
 ds.QueryRetrieveLevel = 'STUDY'
 
 # Associate with peer AE at IP 127.0.0.1 and port 11112
-assoc = ae.associate('10.21.1.12', 4242)
+assoc = ae.associate(hostname, int(port))
 
 if assoc.is_established:
     # Use the C-FIND service to send the identifier
