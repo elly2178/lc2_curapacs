@@ -75,17 +75,6 @@ spec:
       protocol: TCP
       port: 4243
 ---
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: tcp-services
-  labels:
-    app.kubernetes.io/name: ingress-nginx
-    app.kubernetes.io/part-of: ingress-nginx
-  namespace: ingress-nginx
-data:
-  4243: "pacsaas-c0100-local/orthanc-dicom:4243"
----
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:

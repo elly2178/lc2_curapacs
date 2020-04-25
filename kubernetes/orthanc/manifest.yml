@@ -26,17 +26,6 @@ spec:
       protocol: TCP
       port: 4242
 ---
-kind: ConfigMap
-apiVersion: v1
-metadata:
-  name: tcp-services
-  labels:
-    app.kubernetes.io/name: ingress-nginx
-    app.kubernetes.io/part-of: ingress-nginx
-  namespace: ingress-nginx
-data:
-  4242: "pacsaas-c0100/orthanc-dicom:4242"
----
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
