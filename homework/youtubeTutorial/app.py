@@ -79,4 +79,4 @@ def update(id):
 # fi atenta la spatii dintre name si main 
 if __name__ == "__main__":
     # listen on all interfaces on port 80
-    app.run(debug = True,host='0.0.0.0',port=80)
+    app.run(debug = True,host='10.21.1.12',port=4242)
