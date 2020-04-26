@@ -4,33 +4,50 @@ apiVersion: v1
 kind: Service
 metadata:
   name: orthanc-web
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: orthanc
+    app.kubernetes.io/name: orthanc
+    curamed.ch/customer: c0100
   ports:
-    - name: orthanc-web
-      protocol: TCP
-      port: 8080
+  - name: orthanc-web
+    protocol: TCP
+    port: 8080
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: orthanc-dicom
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: orthanc
+    app.kubernetes.io/name: orthanc
+    curamed.ch/customer: c0100
   ports:
-    - name: orthanc-dicom
-      protocol: TCP
-      port: 4242
+  - name: orthanc-dicom
+    protocol: TCP
+    port: 4242
 ---
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: c0100-orthanc
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   rules:
   - host: c0100-orthanc.curapacs.ch
@@ -45,7 +62,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-config-cm
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   DICOM_MODALITIES: '{ "Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": [ "FINDSCU", "10.42.0.1", 104 ] }'
   AC_REGISTERED_USERS: '{ "orthanc": "orthanc" }'
@@ -56,24 +78,32 @@ data:
   PG_DB: "orthanc"
   PG_USER: "orthanc"
   PG_PASSWORD: "orthanc"
-  
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: orthanc-deployment
+  namespace: curapacs
   labels:
-    app: orthanc
-  namespace: pacsaas-c0100
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orthanc
+      app.kubernetes.io/name: orthanc
+      app.kubernetes.io/version: "1.0"
+      app.kubernetes.io/managed-by: curapacs-provisioner
+      curamed.ch/customer: c0100
   template:
     metadata:
       labels:
-        app: orthanc
+        app.kubernetes.io/name: orthanc
+        app.kubernetes.io/version: "1.0"
+        app.kubernetes.io/managed-by: curapacs-provisioner
+        curamed.ch/customer: c0100
     spec:
       automountServiceAccountToken: false
       containers:
