@@ -8,45 +8,5 @@ metadata:
     app.kubernetes.io/part-of: ingress-nginx
   namespace: ingress-nginx
 data:
-  4243: "pacsaas-c0100/orthanc-dicom:4242"
-  4243: "pacsaas-c0100-local/orthanc-dicom:4243"
-
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  annotations:
-    rbac.authorization.kubernetes.io/autoupdate: "true"
-  labels:
-    kubernetes.io/bootstrapping: rbac-defaults
-  name: cluster-admin
-  resourceVersion: "41"
-  selfLink: /apis/rbac.authorization.k8s.io/v1/clusterroles/cluster-admin
-  uid: bb5fd9c7-ad22-4169-8aa1-414379c4b795
-rules:
-- apiGroups:
-  - '*'
-  resources:
-  - '*'
-  verbs:
-  - '*'
-- nonResourceURLs:
-  - '*'
-  verbs:
-  - '*'
----
-apiVersion: rbac.authorization.k8s.io/v1
-# This cluster role binding allows anyone in the "manager" group to read secrets in any namespace.
-kind: ClusterRoleBinding
-metadata:
-  name: curapacs-provisioner-global
-subjects:
-- kind: Group
-  name: manager # Name is case sensitive
-  apiGroup: rbac.authorization.k8s.io
-roleRef:
-  kind: ClusterRole
-  name: secret-reader
-  apiGroup: rbac.authorization.k8s.io
-
-
+  4243: "curapacs/orthanc-dicom:4242"
+  4243: "curapacs-local/orthanc-dicom-local:4243"
