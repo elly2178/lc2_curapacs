@@ -4,10 +4,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: orthanc-postgres
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc-postgres
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: orthanc-postgres
+    app.kubernetes.io/name: orthanc-postgres
+    curamed.ch/customer: c0100
   ports:
     - name: orthanc-postgres
       protocol: TCP
@@ -17,18 +23,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: orthanc-postgres-deployment
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
   labels:
-    app: orthanc-postgres
+    app.kubernetes.io/name: orthanc-postgres
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orthanc-postgres
+      app.kubernetes.io/name: orthanc-postgres
+      app.kubernetes.io/version: "1.0"
+      app.kubernetes.io/managed-by: curapacs-provisioner
+      curamed.ch/customer: c0100
   template:
     metadata:
       labels:
-        app: orthanc-postgres
+        app.kubernetes.io/name: orthanc-postgres
+        app.kubernetes.io/version: "1.0"
+        app.kubernetes.io/managed-by: curapacs-provisioner
+        curamed.ch/customer: c0100
     spec:
       automountServiceAccountToken: false
       containers:
@@ -53,10 +68,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: orthanc-web
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: orthanc
+    app.kubernetes.io/name: orthanc
+    curamed.ch/customer: c0100
   ports:
     - name: orthanc-web
       protocol: TCP
@@ -66,10 +87,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: orthanc-dicom
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: orthanc
+    app.kubernetes.io/name: orthanc
+    curamed.ch/customer: c0100
   ports:
     - name: orthanc-dicom
       protocol: TCP
@@ -79,7 +106,12 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: c0100-orthanc
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   rules:
   - host: c0100-peer.curapacs.ch
@@ -94,7 +126,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-postgresql-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   postgresql.json: |-
     {
@@ -114,7 +151,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-dicom-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   dicom.json: |-
     {
@@ -138,7 +180,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-peering-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   peering.json: |-
     { "OrthancPeers": {"orthanc" : [ "http://c0100-orthanc.curapacs.ch" ] } }
@@ -147,7 +194,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-remote-access-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   remote-access.json: |-
     {
@@ -160,7 +212,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-python-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   python.json: |-
     {
@@ -172,7 +229,12 @@ kind: ConfigMap
 apiVersion: v1
 metadata:
   name: orthanc-http-config-cm
-  namespace: pacsaas-c0100-local
+  namespace: curapacs-local
+  labels:
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   http.json: |-
     {
@@ -191,18 +253,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: orthanc-deployment
+  namespace: curapacs-local
   labels:
-    app: orthanc
-  namespace: pacsaas-c0100-local
+    app.kubernetes.io/name: orthanc
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orthanc
+      app.kubernetes.io/name: orthanc
+      app.kubernetes.io/version: "1.0"
+      app.kubernetes.io/managed-by: curapacs-provisioner
+      curamed.ch/customer: c0100
   template:
     metadata:
       labels:
-        app: orthanc
+        app.kubernetes.io/name: orthanc
+        app.kubernetes.io/version: "1.0"
+        app.kubernetes.io/managed-by: curapacs-provisioner
+        curamed.ch/customer: c0100
     spec:
       automountServiceAccountToken: false
       securityContext:
