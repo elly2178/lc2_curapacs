@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from helpers.listNamespaces import list_namespaces
 from helpers.listOnlyPacs import list_only_Specific
-from helpers.showFullObject import get_showfullobject
+from helpers.fullObjectInformation import get_fullobjectinformation
 from helpers.versionStructuredAll import getAllVersions
 
 app = Flask(__name__)
@@ -18,12 +18,12 @@ def allversions():
 def namespaces():
     return list_namespaces()
 
-@app.route('/showfullobject', methods=['GET'])
-def showfullobject():
-    return get_showfullobject()
+@app.route('/fullobjectinfo', methods=['GET'])
+def fullobjectinfo():
+    return get_fullobjectinformation()
 
-@app.route('/listenTo', methods=['GET'])
-def only():
+@app.route('/filter', methods=['GET'])
+def filter():
     return list_only_Specific()
 
 @app.route('/version',methods=['GET'])

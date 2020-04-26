@@ -4,5 +4,12 @@
   "Plugins" : [
     "/usr/local/share/orthanc/plugins"
   ],
-  "PythonScript" : "/etc/orthanc/sample.py"
+  "PythonScript" : "/etc/orthanc/sample.py",
+  "OrthancPeers" : { 
+	  "orthanc-curapacs" : {
+		  "Url": "http://c0100-orthanc.curapacs.ch:80",
+		  "Username" : "orthanc",
+		  "Password" : "orthanc"
+	  }
+  }  
 }

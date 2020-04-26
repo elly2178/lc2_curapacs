@@ -3,10 +3,16 @@ apiVersion: v1
 kind: Service
 metadata:
   name: meddream-viewer
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: meddream-viewer
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   selector:
-    app: meddream-viewer
+    app.kubernetes.io/name: meddream-viewer
+    curamed.ch/customer: c0100
   ports:
     - name: meddream-viewer
       protocol: TCP
@@ -16,7 +22,12 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: meddream-application-properties-cm 
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: meddream-viewer
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 data:
   application.properties: |-
     com.softneta.license.licenseFileLocation=./license
@@ -46,7 +57,12 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: c0100-meddream
-  namespace: pacsaas-c0100
+  namespace: curapacs
+  labels:
+    app.kubernetes.io/name: meddream-viewer
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   rules:
   - host: c0100-meddream.curapacs.ch
@@ -61,18 +77,27 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: meddream-viewer-deployment
+  namespace: curapacs
   labels:
-    app: meddream-viewer
-  namespace: pacsaas-c0100
+    app.kubernetes.io/name: meddream-viewer
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: curapacs-provisioner
+    curamed.ch/customer: c0100
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: meddream-viewer
+      app.kubernetes.io/name: meddream-viewer
+      app.kubernetes.io/version: "1.0"
+      app.kubernetes.io/managed-by: curapacs-provisioner
+      curamed.ch/customer: c0100
   template:
     metadata:
       labels:
-        app: meddream-viewer
+        app.kubernetes.io/name: meddream-viewer
+        app.kubernetes.io/version: "1.0"
+        app.kubernetes.io/managed-by: curapacs-provisioner
+        curamed.ch/customer: c0100
     spec:
       automountServiceAccountToken: false
       securityContext:

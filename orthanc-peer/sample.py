@@ -1,24 +1,13 @@
-import inspect
-import numbers
 import orthanc
+import json
 
-# Loop over the members of the "orthanc" module
-print("-"*66)
-print("-"*66)
-for (name, obj) in inspect.getmembers(orthanc):
-    if inspect.isroutine(obj):
-        print('Function %s():\n  Documentation: %s\n' % (name, inspect.getdoc(obj)))
+PEER_NAME = "orthanc-curapacs"
 
-    elif inspect.isclass(obj):
-        print('Class %s:\n  Documentation: %s' % (name, inspect.getdoc(obj)))
+def OnChange(changeType, level, resource):
+    if changeType == orthanc.ChangeType.NEW_INSTANCE:
+        print('A new instance was uploaded: %s' % resource)
+        print('Uploading instance {} to peer {}'.format(resource,PEER_NAME))
+        result = orthanc.RestApiPost("/peers/orthanc-curapacs/store", json.dumps(resource))
+        print("Result for {} was {}".format(resource,str(result)))
 
-        # Loop over the members of the class
-        for (subname, subobj) in inspect.getmembers(obj):
-            if isinstance(subobj, numbers.Number):
-                print('  - Enumeration value %s: %s' % (subname, subobj))
-            elif (not subname.startswith('_') and
-                  inspect.ismethoddescriptor(subobj)):
-                print('  - Method %s(): %s' % (subname, inspect.getdoc(subobj)))
-        print('')
-print("-"*66)
-print("-"*66)
+orthanc.RegisterOnChangeCallback(OnChange)

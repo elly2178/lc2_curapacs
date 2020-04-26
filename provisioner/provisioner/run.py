@@ -1,11 +1,10 @@
-from flask import Flask
-from provisioner import app
-from provisioner import helpers
-import provisioner.routes 
 import provisioner.helpers
-from provisioner.config import curapacs_config
+import provisioner.routes
+from provisioner import app
+from provisioner.config import CURAPACS_CONFIG
+
 
 def main():
-    app.run(host=curapacs_config["provisioner_host"],
-            port=curapacs_config["provisioner_port"],
+    app.run(host=CURAPACS_CONFIG["provisioner_host"],
+            port=CURAPACS_CONFIG["provisioner_port"],
             debug=True)
