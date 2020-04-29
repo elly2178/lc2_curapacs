@@ -1,0 +1,19 @@
+{
+  "PatientID": 11788770005213,
+  "PatientName": "Patient B 01/d.,$",
+  "ScheduledProcedureStepSequence": [
+    {
+    "Modality": "US",
+    "AETitle": "PhillipsUS01",
+    "ProcedureStepStartDate": 20200427,
+    "ProcedureStepStartTime": 100000,
+    "PhysicianName": "Max Messermann"
+  },
+  {
+    "Modality": "US",
+    "AETitle": "PhillipsUS01",
+    "ProcedureStepStartDate": 20200429,
+    "ProcedureStepStartTime": 121650,
+    "PhysicianName": "Max Messermann"
+  }]
+}
