@@ -1,6 +1,6 @@
 {
-  "PatientID": 11788770005213,
-  "PatientName": "Patient B 01/d.,$",
+  "PatientID": "11788770005213",
+  "PatientName": "Patient B",
   "ScheduledProcedureStepSequence": [
     {
     "Modality": "US",
