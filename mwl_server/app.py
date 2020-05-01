@@ -1,44 +1,99 @@
-from pydicom.dataset import Dataset
+from flask import Flask, request, jsonify
+from flask_marshmallow import Marshmallow
+import pydicom
+import re
 
-from pynetdicom import AE
-from pynetdicom.sop_class import ModalityWorklistInformationFind
+app = Flask(__name__)
 
-# Initialise the Application Entity
-ae = AE()
+# 4 Serialize objects 
+ma = Marshmallow(app)
+# big task: find meth to itterate in spsq
 
-# Add a requested presentation context
-ae.add_requested_context(ModalityWorklistInformationFind)
+class Worklist():        
+    # set of rules that need to be respected
+    ruleset =  [{ "PatientID": str, "constraints": { "maxlength": 64} },
+                { "PatientName": str, "constraints": { "maxlength": 32, "isextendedalpha": True } },
+                { "Modality": str, "constraints": {} },
+                { "AETitle": str, "constraints": {"maxlength": 16}},
+                { "ProcedureStepStartDate": str, "constraints": {"exactlength": 8, "isnumeric": True}},
+                { "ProcedureStepStartTime": str, "constraints": {} },
+                { "PhysicianName": str, "constraints": {"isextendedalpha": True }}]           
 
-# Create our Identifier (query) dataset
-ds = Dataset()
-ds.PatientName = '*'
-ds.ScheduledProcedureStepSequence = [Dataset()]
-item = ds.ScheduledProcedureStepSequence[0]
-item.ScheduledStationAETitle = 'PhillipsUS01'
-item.ScheduledProcedureStepStartDate = '20200427'
-item.Modality = 'US'
+    def __init__(self, json: dict):
+        self.json = json
+        self.PatientID = json["PatientID"]
+        self.PatientName = json["PatientName"]
+        self.ScheduledProcedureStepSequence = json["ScheduledProcedureStepSequence"]
+        for key, value in Worklist.flattenIterable(json):
+            for rule in Worklist.ruleset:
+                if key in rule.keys():
+                    self.check_value(key, value, rule[key], **rule["constraints"]) 
+                    break 
 
-# Associate with peer AE at IP 127.0.0.1 and port 11112
-assoc = ae.associate('10.21.1.12', 4242)
+    @staticmethod
+    def flattenIterable(someiterable):
+        flattened_list = []
+        if isinstance(someiterable, list):
+            for item in someiterable:
+                flattened_list.extend(Worklist.flattenIterable(item))
+        elif isinstance(someiterable, dict):
+            for key, value in someiterable.items():
+                if isinstance(value, dict):
+                    flattened_list.extend(Worklist.flattenIterable(value))
+                elif isinstance(value, list):
+                    flattened_list.extend(Worklist.flattenIterable(value))
+                else:
+                    flattened_list.append((key, value))
+        return flattened_list
 
-if assoc.is_established:
-    # Use the C-FIND service to send the identifier
-    responses = assoc.send_c_find(
-        ds,
-        ModalityWorklistInformationFind
-    )
+    def check_value(self, key, value, requiredType, **kwargs):
+        # chekcing for value type
+        if not isinstance(value, requiredType):
+            raise TypeError("Value for key {} not of type {}".format(key,str(requiredType)))
+        
+        for additional_constraint, additional_constraint_value in kwargs.items():         
+            #  unsuded, but might be used in case of int conparas :)
+            if additional_constraint == "maxsize":
+                # if pat id co --> give error back
+                if value > additional_constraint_value:
+                    raise ValueError("Value for key {} bigger than {}".format(key, additional_constraint_value))
+            if additional_constraint == "maxlength":
+                # if given lenght is bigger than the one deifined, raise ValErr
+                if len(value) > additional_constraint_value:
+                    raise ValueError("Value for key {} longer than {}".format(key, additional_constraint_value))
+            if additional_constraint == "exactlength":
+                if not len(value) == additional_constraint_value:
+                    raise ValueError("Value for key {} is not exactly {} digits long.".format(key,additional_constraint_value))
+            if additional_constraint == "isnumeric":
+                if not value.isnumeric():
+                   raise ValueError("Value for key {} contains non numeric characters".format(key)) 
+            # remake this, it exculdes space in the name --> always err
+            if additional_constraint == "isextendedalpha":
+                match_pattern = r'^[a-zA-Z^ .]*$'
+                match = re.match(match_pattern, value)
+                if not match:
+                   raise ValueError("Value for key {} does not match pattern {}".format(key, match_pattern)) 
+             
+        return True
 
-    for (status, identifier) in responses:
-        if status:
-            print('C-FIND query status: 0x{0:04x}'.format(status.Status))
+class WorklistSchema(ma.Schema):
+    class Meta:
+        fields = ('PatientID', 'PatientName', 'ScheduledProcedureStepSequence')
 
-            # If the status is 'Pending' then identifier is the C-FIND response
-            if status.Status in (0xFF00, 0xFF01):
-                print(identifier)
-        else:
-            print('Connection timed out, was aborted or received invalid response')
+worklist_schema = WorklistSchema()
 
-    # Release the association
-    assoc.release()
-else:
-    print('Association rejected, aborted or never connected')
+@app.route('/wl', methods = ['POST'])
+def create_wl():
+    #PatientID = request.json['PatientID']
+    #PatientName = request.json['PatientName']
+    #ScheduledProcedureStepSequence = request.json['ScheduledProcedureStepSequence']
+    try:
+        worklist_created = Worklist(request.json)
+    except ValueError as msg:
+        return "Error: {}".format(msg), 400
+
+    retval = worklist_schema.jsonify(worklist_created)  
+    return retval
+                 
+if __name__ == "__main__":
+    app.run(debug = True)  
