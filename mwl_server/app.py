@@ -7,7 +7,6 @@ app = Flask(__name__)
 
 # 4 Serialize objects 
 ma = Marshmallow(app)
-# big task: find meth to itterate in spsq
 
 class Worklist():        
     # set of rules that need to be respected
@@ -17,7 +16,7 @@ class Worklist():
                 { "AETitle": str, "constraints": {"maxlength": 16}},
                 { "ProcedureStepStartDate": str, "constraints": {"exactlength": 8, "isnumeric": True}},
                 { "ProcedureStepStartTime": str, "constraints": {} },
-                { "PhysicianName": str, "constraints": {"isextendedalpha": True }}]           
+                { "PhysicianName": str, "constraints": {"isextendedalpha": True }}]
 
     def __init__(self, json: dict):
         self.json = json
@@ -29,7 +28,8 @@ class Worklist():
                 if key in rule.keys():
                     self.check_value(key, value, rule[key], **rule["constraints"]) 
                     break 
-
+    
+    # method for going through all elements of the wl
     @staticmethod
     def flattenIterable(someiterable):
         flattened_list = []
@@ -45,7 +45,8 @@ class Worklist():
                 else:
                     flattened_list.append((key, value))
         return flattened_list
-
+    
+    # input validation
     def check_value(self, key, value, requiredType, **kwargs):
         # chekcing for value type
         if not isinstance(value, requiredType):
@@ -81,12 +82,10 @@ class WorklistSchema(ma.Schema):
         fields = ('PatientID', 'PatientName', 'ScheduledProcedureStepSequence')
 
 worklist_schema = WorklistSchema()
+worklists_schema = WorklistSchema()
 
 @app.route('/wl', methods = ['POST'])
 def create_wl():
-    #PatientID = request.json['PatientID']
-    #PatientName = request.json['PatientName']
-    #ScheduledProcedureStepSequence = request.json['ScheduledProcedureStepSequence']
     try:
         worklist_created = Worklist(request.json)
     except ValueError as msg:
@@ -94,6 +93,17 @@ def create_wl():
 
     retval = worklist_schema.jsonify(worklist_created)  
     return retval
-                 
+
+@app.route('/wl', methods = ['GET'])
+def retrieveWorkList():
+    #expected a list of all the existing workmodalities
+    # expected place to look for information is in the Databanse ./worklistsdatabase --> orthanc book tutorial
+    # make " ./WorklistsDatabase" a variable
+    
+    
+
+#@app.route('/wl/updateworklist', methods = ['PUT'])                 
+
+# 2.5 How to create a worklist file  use pydicom and not dcmdump
 if __name__ == "__main__":
     app.run(debug = True)  
