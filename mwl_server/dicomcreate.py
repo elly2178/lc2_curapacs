@@ -1,6 +1,7 @@
 import os
 import tempfile
 import datetime
+from pydicom.sequence import Sequence
 
 import pydicom
 from pydicom.dataset import Dataset, FileDataset, DataElement, datadict
