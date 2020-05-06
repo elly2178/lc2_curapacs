@@ -5,7 +5,6 @@
     "/usr/local/share/orthanc/plugins"
   ],
   "PythonScript" : "/etc/orthanc/sample.py",
-  "LuaScripts": ["/etc/orthanc/intercept_c_find.lua"],
   "OrthancPeers" : { 
 	  "c0100-orthanc" : {
 		  "Url": "http://c0100-orthanc.curapacs.ch:80",
