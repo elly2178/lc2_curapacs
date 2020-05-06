@@ -13,5 +13,4 @@ def instances(instance_id=None):
         if labels["curamed.ch/customer"] not in instance_dict:
             instance_dict[labels["curamed.ch/customer"]] = {}
         instance_dict[labels["curamed.ch/customer"]][labels["app.kubernetes.io/name"]] = containers[0].image
-
     return jsonify(instance_dict)
