@@ -6,10 +6,13 @@
   ],
   "PythonScript" : "/etc/orthanc/sample.py",
   "OrthancPeers" : { 
-	  "orthanc-curapacs" : {
+	  "c0100-orthanc" : {
 		  "Url": "http://c0100-orthanc.curapacs.ch:80",
 		  "Username" : "orthanc",
 		  "Password" : "orthanc"
 	  }
-  }  
+  },
+  "DicomModalities" : {
+	"findscu" : [ "FINDSCU", "127.0.0.1", 1234 ]
+  }
 }
