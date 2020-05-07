@@ -7,6 +7,8 @@ from pydicom.uid import UID, generate_uid
 from pydicom.datadict import dictionary_VR
 import re
 import random
+import time
+import os
 
 app = Flask(__name__)
 
@@ -14,6 +16,9 @@ app = Flask(__name__)
 ma = Marshmallow(app)
 
 class Worklist():        
+    #path and suffix for file
+    modality_worklist_path = "/home/schumi/lc2/lc2_curapacs/mwl_server/"
+    modality_worklist_suffix = "wl"
     # set of rules that need to be respected
     ruleset =  [{ "PatientID": str, "constraints": { "maxlength": 64, "returnkeytype": 1 }},
                 { "PatientName": str, "constraints": { "maxlength": 32, "isextendedalpha": True, "returnkeytype": 1 }},
@@ -123,7 +128,10 @@ class Worklist():
         return True
                       
     def storeDataSetOnDisk(self):
-        self.pydicom_dataset.save_as("/tmp/ournicemwl.dcm")
+        currentDate = time.strftime('%G-%m-%d_%H-%M-%S', time.localtime())
+        concatination_file_name = os.path.join(Worklist.modality_worklist_path, currentDate + "." + Worklist.modality_worklist_suffix)
+        self.pydicom_dataset.save_as(concatination_file_name)
+        
 
     def generateAccessionNumber(self,minlength=8):
         return str(random.randint(10**minlength,10**16-1))
