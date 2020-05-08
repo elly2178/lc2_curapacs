@@ -1,0 +1,17 @@
+---
+nameSuffix: -c0100
+
+commonLabels:
+  curamed.ch/customer: c0100
+  app.kubernetes.io/name: orthanc-postgres
+  app.kubernetes.io/version: "1.0"
+  app.kubernetes.io/managed-by: curapacs-provisioner
+
+resources:
+- ../../resources
+
+namespace: curapacs
+
+images:
+- name: postgres
+  newTag: "9.6"

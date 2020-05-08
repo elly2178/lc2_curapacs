@@ -89,15 +89,6 @@ ds.file_meta.TransferSyntaxUID = pydicom.uid.ExplicitVRBigEndian
 ds.is_little_endian = False
 ds.is_implicit_VR = False
 
-print("Writing test file as {} Explicit VR".format(filename_big_endian))
-ds.save_as(filename_big_endian)
 
-# reopen the data just for checking
-for filename in (filename_little_endian, filename_big_endian):
-    print('Load file {} ...'.format(filename))
-    ds = pydicom.dcmread(filename)
-    print(ds)
-
-    # remove the created file
-    print('Remove file {} ...'.format(filename))
-    os.remove(filename)
+ 
+   
