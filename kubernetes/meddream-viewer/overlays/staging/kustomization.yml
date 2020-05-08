@@ -1,0 +1,26 @@
+---
+nameSuffix: -c0100
+
+commonLabels:
+  curamed.ch/customer: c0100
+  app.kubernetes.io/name: meddream-viewer
+  app.kubernetes.io/version: "1.0"
+  app.kubernetes.io/managed-by: curapacs-provisioner
+
+resources:
+- ../../resources
+
+namespace: curapacs
+
+images:
+- name: meddream/orthanc-dicom-viewer
+  newTag: "7.5.1"
+
+patches:
+- path: ingress_patch.json
+  target:
+    group: extensions
+    version: v1beta1
+    kind: Ingress
+    name: meddream-viewer
+
