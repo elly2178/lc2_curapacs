@@ -6,13 +6,11 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import orthanc
 
-LOGGER = logging.getLogger()
-LOGGER.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(sys.stdout)
-handler.setLevel(logging.DEBUG)
-handler.setFormatter(logging.Formatter('%(message)s'))
-LOGGER.addHandler(handler)
 
+LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
+logging_handler = logging.StreamHandler(sys.stdout)
+logging.basicConfig(handlers=[logging_handler], level=logging.DEBUG, format=LOG_FORMAT)
+LOGGER = logging.getLogger()
 
 PEER_NAME = "c0100-orthanc"
 PEER_DOMAIN = "curapacs.ch"
@@ -22,37 +20,58 @@ HTTP_TIMEOUT = 5
 HTTP_USER = "orthanc"
 HTTP_PASSWORD = "orthanc"
 
-def post_data(url, data, headers={'Content-Type':'application/json'}, timeout=HTTP_TIMEOUT):
+def post_data(url, data, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
     LOGGER.debug(f"post_data called with args: {url} and headers {headers}")
     if HTTP_USER:
         headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
+    if is_json:
+        headers.update({"Content-Type": "application/json"})
     bindata = data if isinstance(data, bytes) else data.encode('utf-8')
     req = Request(url, bindata, headers)
     resp = urlopen(req, timeout=timeout)
     return json.loads(resp.read().decode()), resp.getheaders()
 
-def get_data(url, headers={'Content-Type':'application/json'}, timeout=HTTP_TIMEOUT):
+def get_data(url, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
+    """
+    Issues http GET to a url
+    """
     LOGGER.debug(f"get_data called with args: {url} and headers {headers}")
+    if not headers:
+        headers = {}
     if HTTP_USER:
         headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
+    if is_json:
+        headers.update({"Content-Type": "application/json"})
     req = Request(url, headers=headers)
     resp = urlopen(req, timeout=timeout)
-    if "Content-Type" in headers.keys() and headers["Content-Type"] == "application/json":
-        try:
-            answer_content = json.loads(resp.read().decode())
-        except UnicodeDecodeError:
-            raise PermissionError('Content of response is {}'.format(resp.getcode()))
-        answer_headers = resp.getheaders()
-        LOGGER.debug(f"get_data got response with headers: {answer_headers}")
+    answer_headers = resp.getheaders()
+    if "Content-Type" in headers.keys() and "application/json" in headers["Content-Type"]:
+        answer_content = json.loads(resp.read().decode())
+        LOGGER.debug(f"get_data got json response with headers: {answer_headers}")
         return answer_content, answer_headers
+    LOGGER.debug(f"get_data got response with headers: {answer_headers}")
     return resp.read(), resp.getheaders()
 
 def get_http_auth_header(username, password):
+    """
+    :param username: Basic Auth Username
+    :param password: Basic Auth Password
+    :returns: HTTP Header as dict containing basic auth information
+    """
     b64string = base64.b64encode(bytes("{}:{}".format(username, password), encoding="utf-8"))
     return {"Authorization": "Basic {}".format(b64string.decode())}
 
 def getOrthancResource(resource_type, resource_id, orthanc_uri=ORTHANC_URI):
-    LOGGER.debug(f"getOrthancResource called with args: {resource_type}, {resource_id} and orthanc_uri {orthanc_uri}")
+    """
+    Given the Orthanc ID of a resource (Study/Series), return a resource dict
+    containing metadata including child resources
+    
+    :param resource_type: "Study" or "Series"
+    :param resource_id: Orthanc ID of resource
+    :returns: dict containing metadata (including IDs of child resources) of resource
+    """
+    LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
+                "resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
     headers = {'Content-Type':'application/json'}
     headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
     if resource_type == "Study":
@@ -61,12 +80,23 @@ def getOrthancResource(resource_type, resource_id, orthanc_uri=ORTHANC_URI):
         return get_data("{}/series/{}".format(orthanc_uri, resource_id), headers=headers)
 
 def getOrthancInstances(orthanc_uri=ORTHANC_URI):
+    """
+    Ask remote orthanc API for a complete list of all available instance IDs.
+
+    :param orthanc_uri: URI (https://sample.orthanc.org:8080) 
+    """
     LOGGER.debug(f"getOrthancInstances called with args: orthanc_uri {orthanc_uri}")
-#    headers = {'Content-Type':'application/json'}
-#    headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
     return get_data("{}/instances".format(orthanc_uri))
 
-def fetchOrthancInstances(instance_id, remote_orthanc_uri=ORTHANC_URI, local_orthanc_uri="http://localhost:{}".format(str(LOCAL_HTTP_PORT))):
+def fetchOrthancInstances(instance_id, remote_orthanc_uri=ORTHANC_URI,\
+                        local_orthanc_uri="http://localhost:{}".format(str(LOCAL_HTTP_PORT))):
+    """
+    Download DICOM Data of instance with instance_id to local orthanc.
+
+    :param instance_id: Orthanc instance id string
+    :param remote_orthanc_uri: URI (https://sample.orthanc.org:8080) to fetch instances from
+    :param local_orthanc_uri: URI of the instance running this plugin
+    """
     LOGGER.debug(f"fetchOrthancInstances called with args: {instance_id},\
          remote_orthanc_uri {remote_orthanc_uri} local_orthanc_uri {local_orthanc_uri}")
     headers = get_http_auth_header(HTTP_USER, HTTP_PASSWORD)
@@ -76,15 +106,16 @@ def fetchOrthancInstances(instance_id, remote_orthanc_uri=ORTHANC_URI, local_ort
 
 def getInstancesOfOrthancResource(resource):
     """
+    Recurse downwards (Patient -> Study -> Series -> Instance) returning all instances.
+
     :param param1: dict as returned by orthanc/tools/find, contains infos on resource
-    :returns: list of orthanc instance ID of the resource
+    :returns: list of orthanc instance IDs of the resource
     """
     LOGGER.debug(f"getInstancesOfOrthancResource called with args {resource}")
     instance_list = []
     try:
         resource_type = resource["Type"]
     except KeyError:
-        #raise ValueError("Resource does not contain ID or Type ({})".format(resource))
         return instance_list
     if resource_type == "Patient":
         for study_id in resource["Studies"]:
