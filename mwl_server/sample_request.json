@@ -4,16 +4,16 @@
   "ScheduledProcedureStepSequence": [
     {
     "Modality": "US",
-    "AETitle": "PhillipsUS01",
-    "ProcedureStepStartDate": "20200427",
-    "ProcedureStepStartTime": "100000",
-    "PhysicianName": "Max Messermann"
+    "ScheduledStationAETitle": "PhillipsUS01",
+    "ScheduledProcedureStepStartDate": "20200427",
+    "ScheduledProcedureStepStartTime": "100000",
+    "ScheduledPerformingPhysicianName": "Max Messermann"
   },
   {
     "Modality": "US",
-    "AETitle": "PhillipsUS01",
-    "ProcedureStepStartDate": "20200429",
-    "ProcedureStepStartTime": "121650",
-    "PhysicianName": "Max^Messermann"
+    "ScheduledStationAETitle": "PhillipsUS01",
+    "ScheduledProcedureStepStartDate": "20200429",
+    "ScheduledProcedureStepStartTime": "121650",
+    "ScheduledPerformingPhysicianName": "Max^Messermann"
   }]
 }
