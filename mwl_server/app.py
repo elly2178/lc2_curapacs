@@ -1,11 +1,3 @@
-from flask import Flask, request, jsonify
-from flask_marshmallow import Marshmallow
-import pydicom
-from pydicom import dcmread
-from pydicom.dataset import Dataset
-from pydicom.sequence import Sequence
-from pydicom.uid import UID, generate_uid
-from pydicom.datadict import dictionary_VR
 import re
 import random
 import time
@@ -13,40 +5,51 @@ import os
 import hashlib
 import logging
 import sys
+from json import loads, dumps
+from pydicom import dcmread
+from pydicom.dataset import Dataset
+from pydicom.uid import generate_uid
+from pydicom.datadict import dictionary_VR
 
 LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
 logging_handler = logging.StreamHandler(sys.stdout)
-logging.basicConfig(handlers=[logging_handler], level = logging.DEBUG, format= LOG_FORMAT)
+logging.basicConfig(handlers=[logging_handler], level=logging.DEBUG, format=LOG_FORMAT)
 LOGGER = logging.getLogger()
 
-class Worklist():        
+try:
+    import orthanc
+except ImportError:
+    LOGGER.warning("Failed to import orthanc module.")
+
+class Worklist():
     modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/tmp")
     modality_worklist_suffix = os.environ.get("ORTHANC_WORKLIST_SUFFIX", "wl")
     
     # set of rules that need to be respected
-    ruleset =  [{ "PatientID": str, "constraints": { "maxlength": 64, "returnkeytype": 1 }},
-                { "PatientName": str, "constraints": { "maxlength": 32, "isextendedalpha": True, "returnkeytype": 1 }},
-                { "Modality": str, "constraints": {"returnkeytype": 1 }},
-                { "ScheduledStationAETitle": str, "constraints": {"maxlength": 16, "returnkeytype": 1 }},
-                { "ScheduledProcedureStepStartDate": str, "constraints": {"exactlength": 8, "isnumeric": True, "returnkeytype": 1}},
-                { "ScheduledProcedureStepStartTime": str, "constraints": {"returnkeytype": 1}},
-                { "ScheduledPerformingPhysicianName": str, "constraints": {"isextendedalpha": True, "returnkeytype": 2}}]
+    ruleset = [{"PatientID": str, "constraints": {"maxlength": 64, "returnkeytype": 1 }},
+               {"PatientName": str, "constraints": {"maxlength": 32, "isextendedalpha": True, "returnkeytype": 1 }},
+               {"Modality": str, "constraints": {"returnkeytype": 1 }},
+               {"ScheduledStationAETitle": str, "constraints": {"maxlength": 16, "returnkeytype": 1 }},
+               {"ScheduledProcedureStepStartDate": str, "constraints": {"exactlength": 8, "isnumeric": True, "returnkeytype": 1}},
+               {"ScheduledProcedureStepStartTime": str, "constraints": {"returnkeytype": 1}},
+               {"ScheduledPerformingPhysicianName": str, "constraints": {"isextendedalpha": True, "returnkeytype": 2}}]
 
 
-    def __init__(self, json: dict):
+    def __init__(self, json=None):
         self.pydicom_dataset = Dataset()
-        self.json = json
-        self.PatientID = json["PatientID"]
-        self.PatientName = json["PatientName"]
-        self.ScheduledProcedureStepSequence = json["ScheduledProcedureStepSequence"]
+        if json:
+            self.json = loads(json)
+
+    def create_worklist_from_json(self, json: dict):
         for key, value in Worklist.flattenIterable(json):
             for rule in Worklist.ruleset:
                 if key in rule.keys():
-                    self.check_value(key, value, rule[key], **rule["constraints"]) 
+                    self.check_value(key, value, rule[key], **rule["constraints"])
                     break
         self.check_required_tags()
         self.createDataSetFromJson()
-        self.storeDataSetOnDisk()
+        filehash = self.storeDataSetOnDisk()
+        return {"id": filehash}
 
     @staticmethod
     def flattenIterable(someiterable):
@@ -64,17 +67,17 @@ class Worklist():
                     flattened_list.append((key, value))
         return flattened_list
 
-    def create_worklists_response_dict(self):
+    def create_available_worklists_response_dict(self):
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
             hashed_filename = self.hashme(worklist_filename)
             ds = self.create_dataset_from_file(Worklist.modality_worklist_path + "/" + worklist_filename)
             response_dict[hashed_filename] = ds.to_json_dict()
-        return response_dict
+        return dumps(response_dict)
 
     def create_dataset_from_file(self, filepath):
         LOGGER.debug(f"Creating new pydicom dataset from file {filepath}")
-        return dcmread(filepath,stop_before_pixels=True)
+        return dcmread(filepath, stop_before_pixels=True)
 
     def hashme(self, string_to_hash):
         LOGGER.debug(f"Worklist from file {string_to_hash} has been hashed")
@@ -150,32 +153,35 @@ class Worklist():
         """
         pydicom_json = {}
         for key, value in request_json.items():
-            if isinstance(value,list):
+            if isinstance(value, list):
                 scheduledsequences = []
                 for item in value:
                     scheduledsequences.append(self.reformatJSON(item))
                 pydicom_json[key] = {"Value": scheduledsequences, "vr": dictionary_VR(key)}
-            else:                                 
+            else:
                 pydicom_json[key] = {"Value": [value], "vr": dictionary_VR(key)}
         return pydicom_json
 
     def check_required_tags(self):
         """checks if all required json keys are present as defined by Worklist.ruleset --> constraints"""
         json_keys = [json_tuple[0] for json_tuple in Worklist.flattenIterable(self.json)]
+        LOGGER.debug(f"json_keys are {json_keys}")
         for rule in Worklist.ruleset:
-            returnkeytype = rule["constraints"].get("returnkeytype",3)
+            returnkeytype = rule["constraints"].get("returnkeytype", 3)
             for key in rule.keys():
                 if key == "constraints":
                     continue
-                if key not in json_keys and returnkeytype in (1,2):
+                if key not in json_keys and returnkeytype in (1, 2):
                     raise KeyError(f"Required DICOM tag \"{key}\" not found in json structure.")
         return True
                       
     def storeDataSetOnDisk(self):
         """writes Dataset (Worklist DICOM File) to disk, filename is a timestamp"""
         currentDate = time.strftime('%G-%m-%d_%H-%M-%S', time.localtime())
-        concatination_file_name = os.path.join(Worklist.modality_worklist_path, currentDate + "." + Worklist.modality_worklist_suffix)
-        self.pydicom_dataset.save_as(concatination_file_name)        
+        filename = currentDate + "." + Worklist.modality_worklist_suffix
+        concatination_file_name = os.path.join(Worklist.modality_worklist_path, filename)
+        self.pydicom_dataset.save_as(concatination_file_name)
+        return self.hashme(filename)
 
     def generateAccessionNumber(self,minlength=8):
         return str(random.randint(10**minlength,10**16-1))
@@ -183,7 +189,7 @@ class Worklist():
     def generateStudyID(self):
         return generate_uid()
      
-# 2.5 How to create a worklist file  use pydicom and not dcmdump
+
 if __name__ == "__main__":
     json1 = {
     "PatientID": "11788770005213",
@@ -205,5 +211,17 @@ if __name__ == "__main__":
     }]
     }
     someworklist = Worklist(json1)
-    print(someworklist.create_worklists_response_dict())
-    
+    print(someworklist.create_available_worklists_response_dict())
+
+
+def worklist_worker(output, uri_path, **kwargs):
+    if kwargs["method"] == "GET":
+        myworklist = Worklist()
+        worklists = myworklist.create_available_worklists_response_dict()
+        output.AnswerBuffer(str(worklists), 'application/json')
+    elif kwargs["method"] == "POST":
+        myworklist = Worklist(json=kwargs["body"])
+        response_dict = myworklist.create_worklist_from_json(myworklist.json)
+        output.AnswerBuffer(str(response_dict), 'application/json')
+
+orthanc.RegisterRestCallback('/worklists', worklist_worker)

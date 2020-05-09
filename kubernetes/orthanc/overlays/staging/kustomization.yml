@@ -1,0 +1,31 @@
+---
+nameSuffix: -c0100
+
+commonLabels:
+  curamed.ch/customer: c0100
+  app.kubernetes.io/name: orthanc
+  app.kubernetes.io/version: "1.0"
+  app.kubernetes.io/managed-by: curapacs-provisioner
+
+resources:
+- ../../resources
+
+namespace: curapacs
+
+images:
+- name: osimis/orthanc
+  newTag: "20.3.1"
+
+patches:
+- path: ingress_patch.json
+  target:
+    group: extensions
+    version: v1beta1
+    kind: Ingress
+    name: orthanc
+- path: dicom_service_patch.json
+  target:
+    version: v1
+    kind: Service
+    name: orthanc-dicom
+
