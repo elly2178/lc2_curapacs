@@ -5,11 +5,12 @@ import os
 import hashlib
 import logging
 import sys
+import copy
 from json import loads, dumps
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 from pydicom.uid import generate_uid
-from pydicom.datadict import dictionary_VR
+from pydicom.datadict import dictionary_VR, keyword_for_tag
 
 LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
 logging_handler = logging.StreamHandler(sys.stdout)
@@ -67,12 +68,36 @@ class Worklist():
                     flattened_list.append((key, value))
         return flattened_list
 
+    def replace_tags_with_keywords(self, worklist_dict):
+        """
+        dont ask, just enjoy
+        iterate through json structure containing information on existing worklists
+        and replace all occurrences of dicom tags with their corresponding keywords.
+        """
+        keyword_dict = copy.deepcopy(worklist_dict)
+        for key, value in worklist_dict.items():
+            if isinstance(value, dict):
+                for dicom_tag, vr_dict in value.items():
+                    dicom_keyword = keyword_for_tag(int(dicom_tag, 16))
+                    keyword_dict[key][dicom_keyword] = keyword_dict[key].pop(dicom_tag)
+                    if vr_dict["Value"] and isinstance(vr_dict["Value"][0], dict):
+                        for index, nested_vr_dict in enumerate(vr_dict["Value"]):
+                            for nested_dicom_tag, nested_nested_vr_dict in nested_vr_dict.items():
+                                try:
+                                    nested_dicom_keyword = keyword_for_tag(int(nested_dicom_tag, 16))
+                                except ValueError:
+                                    continue
+                                keyword_dict[key][dicom_keyword]["Value"][index][nested_dicom_keyword] = \
+                                    keyword_dict[key][dicom_keyword]["Value"][index].pop(nested_dicom_tag)
+        return keyword_dict
+
     def create_available_worklists_response_dict(self):
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
             hashed_filename = self.hashme(worklist_filename)
             ds = self.create_dataset_from_file(Worklist.modality_worklist_path + "/" + worklist_filename)
             response_dict[hashed_filename] = ds.to_json_dict()
+            response_dict = self.replace_tags_with_keywords(response_dict)
         return dumps(response_dict)
 
     def create_dataset_from_file(self, filepath):
