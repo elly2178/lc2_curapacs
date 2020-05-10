@@ -2,15 +2,20 @@ import json
 import base64
 import sys
 import logging
+import requests
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
-import orthanc
 
 
 LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
 logging_handler = logging.StreamHandler(sys.stdout)
 logging.basicConfig(handlers=[logging_handler], level=logging.DEBUG, format=LOG_FORMAT)
 LOGGER = logging.getLogger()
+
+try:
+    import orthanc
+except ImportError:
+    LOGGER.warning("Failed to import orthanc module.")
 
 PEER_NAME = "c0100-orthanc"
 PEER_DOMAIN = "curapacs.ch"
@@ -21,36 +26,40 @@ HTTP_USER = "orthanc"
 HTTP_PASSWORD = "orthanc"
 
 def post_data(url, data, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
-    LOGGER.debug(f"post_data called with args: {url} and headers {headers}")
-    if HTTP_USER:
-        headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
-    if is_json:
-        headers.update({"Content-Type": "application/json"})
-    bindata = data if isinstance(data, bytes) else data.encode('utf-8')
-    req = Request(url, bindata, headers)
-    resp = urlopen(req, timeout=timeout)
-    return json.loads(resp.read().decode()), resp.getheaders()
-
-def get_data(url, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
     """
-    Issues http GET to a url
+    Issues http POST to a url
     """
-    LOGGER.debug(f"get_data called with args: {url} and headers {headers}")
-    if not headers:
+    LOGGER.debug(f"post_data called with args: {url}, headers: {headers}, body with size: {len(data)}")
+    if headers is None:
         headers = {}
     if HTTP_USER:
         headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
     if is_json:
         headers.update({"Content-Type": "application/json"})
-    req = Request(url, headers=headers)
-    resp = urlopen(req, timeout=timeout)
-    answer_headers = resp.getheaders()
-    if "Content-Type" in headers.keys() and "application/json" in headers["Content-Type"]:
-        answer_content = json.loads(resp.read().decode())
-        LOGGER.debug(f"get_data got json response with headers: {answer_headers}")
-        return answer_content, answer_headers
-    LOGGER.debug(f"get_data got response with headers: {answer_headers}")
-    return resp.read(), resp.getheaders()
+        response = requests.post(url, json=data, headers=headers, timeout=HTTP_TIMEOUT)
+        return response.json(), response.headers
+    else:
+        response = requests.post(url, data=data, headers=headers, timeout=HTTP_TIMEOUT)
+        return response.content, response.headers
+
+def get_data(url, headers=None, timeout=HTTP_TIMEOUT):
+    """
+    Issues http GET to a url
+    """
+    if not headers:
+        headers = {}
+    if HTTP_USER:
+        headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
+    headers.update({"Accept":"application/json"})
+    response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
+    if response.status_code > 299:
+        LOGGER.warning(f"HTTP GET got bad response, status {response.status_code}, content {response.content}")
+    elif "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
+        LOGGER.debug("HTTP GET received JSON structure.")
+        return response.json(), response.headers
+    else:
+        LOGGER.info("HTTP GET received NON-JSON structure.")
+        return response.content, response.headers
 
 def get_http_auth_header(username, password):
     """
@@ -61,101 +70,113 @@ def get_http_auth_header(username, password):
     b64string = base64.b64encode(bytes("{}:{}".format(username, password), encoding="utf-8"))
     return {"Authorization": "Basic {}".format(b64string.decode())}
 
-def getOrthancResource(resource_type, resource_id, orthanc_uri=ORTHANC_URI):
-    """
-    Given the Orthanc ID of a resource (Study/Series), return a resource dict
-    containing metadata including child resources
+class Orthanc:
+
+    def __init__(self, url, http_user=None, http_password=None, find_limit=25):
+        self.url = url
+        self.http_user = http_user
+        self.http_password = http_password
+        self.find_limit = find_limit
+
+    def getOrthancResource(self, resource_type, resource_id, orthanc_uri=ORTHANC_URI):
+        """
+        Given the Orthanc ID of a resource (Study/Series), return a resource dict
+        containing metadata (including child resources) of resource
+        
+        :param resource_type: "Study" or "Series"
+        :param resource_id: Orthanc ID of resource
+        :returns: dict containing metadata (including IDs of child resources) of resource
+        """
+        LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
+                    "resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
+        if resource_type == "Study":
+            return get_data(f"{orthanc_uri}/studies/{resource_id}")
+        elif resource_type == "Series":
+            return get_data(f"{orthanc_uri}/series/{resource_id}")
+
+    def getOrthancInstances(self):
+        """
+        Ask remote orthanc API for a complete list of all available instance IDs.
+
+        :param orthanc_uri: URI (https://sample.orthanc.org:8080) 
+        """
+        instance_list, _ = get_data(f"{self.url}/instances")
+        LOGGER.debug(f"local_instances are {instance_list}")
+        return instance_list
+
+    def fetchOrthancInstance(self, instance_id, remote_orthanc_uri=ORTHANC_URI):
+        """
+        Download DICOM Data of instance with instance_id to local orthanc.
+
+        :param instance_id: Orthanc instance id string
+        :param remote_orthanc_uri: URI (https://sample.orthanc.org:8080) to fetch instances from
+        :param local_orthanc_uri: URI of the instance running this plugin
+        """
+        LOGGER.debug(f"Fetching instance {instance_id} from {remote_orthanc_uri}")
+        content, _ = get_data(f"{remote_orthanc_uri}/instances/{instance_id}/file")
+        post_data(f"{self.url}/instances", content, is_json=False)
+
+    def getInstancesOfOrthancResource(self, resource):
+        """
+        Recurse downwards (Patient -> Study -> Series -> Instance) returning all instances.
+
+        :param param1: dict as returned by orthanc/tools/find, contains infos on resource
+        :returns: list of orthanc instance IDs of the resource
+        """
+        LOGGER.debug(f"getInstancesOfOrthancResource called with args {resource}")
+        instance_list = []
+        try:
+            resource_type = resource["Type"]
+        except KeyError:
+            return instance_list
+        if resource_type == "Patient":
+            for study_id in resource["Studies"]:
+                study_resource, _ = self.getOrthancResource("Study", study_id)
+                instance_list = self.getInstancesOfOrthancResource(study_resource)
+        elif resource_type == "Study":
+            for series_id in resource["Series"]:
+                series_resource, _ = self.getOrthancResource("Series", series_id)
+                instance_list = self.getInstancesOfOrthancResource(series_resource)
+        elif resource_type == "Series":
+            instance_list.extend(resource["Instances"])
+            return instance_list
+        else:
+            raise ValueError(f"Resource has unknown Type {resource_type}")
+        return instance_list
     
-    :param resource_type: "Study" or "Series"
-    :param resource_id: Orthanc ID of resource
-    :returns: dict containing metadata (including IDs of child resources) of resource
-    """
-    LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
-                "resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
-    headers = {'Content-Type':'application/json'}
-    headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
-    if resource_type == "Study":
-        return get_data("{}/studies/{}".format(orthanc_uri, resource_id), headers=headers)
-    elif resource_type == "Series":
-        return get_data("{}/series/{}".format(orthanc_uri, resource_id), headers=headers)
-
-def getOrthancInstances(orthanc_uri=ORTHANC_URI):
-    """
-    Ask remote orthanc API for a complete list of all available instance IDs.
-
-    :param orthanc_uri: URI (https://sample.orthanc.org:8080) 
-    """
-    LOGGER.debug(f"getOrthancInstances called with args: orthanc_uri {orthanc_uri}")
-    return get_data("{}/instances".format(orthanc_uri))
-
-def fetchOrthancInstances(instance_id, remote_orthanc_uri=ORTHANC_URI,\
-                        local_orthanc_uri="http://localhost:{}".format(str(LOCAL_HTTP_PORT))):
-    """
-    Download DICOM Data of instance with instance_id to local orthanc.
-
-    :param instance_id: Orthanc instance id string
-    :param remote_orthanc_uri: URI (https://sample.orthanc.org:8080) to fetch instances from
-    :param local_orthanc_uri: URI of the instance running this plugin
-    """
-    LOGGER.debug(f"fetchOrthancInstances called with args: {instance_id},\
-         remote_orthanc_uri {remote_orthanc_uri} local_orthanc_uri {local_orthanc_uri}")
-    headers = get_http_auth_header(HTTP_USER, HTTP_PASSWORD)
-    content, _ = get_data("{}/instances/{}/file".format(remote_orthanc_uri, instance_id))
-    post_data("{}/instances".format(local_orthanc_uri), content, headers)
-
-
-def getInstancesOfOrthancResource(resource):
-    """
-    Recurse downwards (Patient -> Study -> Series -> Instance) returning all instances.
-
-    :param param1: dict as returned by orthanc/tools/find, contains infos on resource
-    :returns: list of orthanc instance IDs of the resource
-    """
-    LOGGER.debug(f"getInstancesOfOrthancResource called with args {resource}")
-    instance_list = []
-    try:
-        resource_type = resource["Type"]
-    except KeyError:
-        return instance_list
-    if resource_type == "Patient":
-        for study_id in resource["Studies"]:
-            study_resource, _ = getOrthancResource("Study", study_id)
-            instance_list = getInstancesOfOrthancResource(study_resource)
-    elif resource_type == "Study":
-        for series_id in resource["Series"]:
-            series_resource, _ = getOrthancResource("Series", series_id)
-            instance_list = getInstancesOfOrthancResource(series_resource)
-    elif resource_type == "Series":
-        instance_list.extend(resource["Instances"])
-        return instance_list
-    else:
-        raise ValueError("Resource has unknown Type '{}'".format(resource_type))
-    return instance_list
+    def findResources(self, query, level="Patient", limit=None):
+        post_body = {"Level": level,
+                     "Expand": True,
+                     "Query": query}
+        if limit is not None:
+            post_body.update("limit", self.find_limit)
+        content, _ = post_data(f"{self.url}/tools/find", post_body)
+        LOGGER.debug(f"Resources found via /tools/find are {content}")
+        return content
 
 def OnFind(output, uri_path, **kwargs):
-    LOGGER.debug(f"/enhancequery called with args: {kwargs['body']}")
+    LOGGER.debug(f"{uri_path} called with body: {kwargs['body']}")
+    local_orthanc = Orthanc(f"http://localhost:{LOCAL_HTTP_PORT}",
+                            http_user=HTTP_USER,
+                            http_password=HTTP_PASSWORD)
+    remote_orthanc = Orthanc(ORTHANC_URI,
+                             http_user=HTTP_USER,
+                             http_password=HTTP_PASSWORD)
+    
     body = json.loads(kwargs["body"])
-    url = '{}/tools/find'.format(ORTHANC_URI)
-    post_body = {
-            "Level": body["0008,0052"],
-            "Expand": True,
-            "Limit": 5,
-            "Query": {"PatientID": body["0010,0020"], "PatientName": body["0010,0010"]}}
-    post_body = json.dumps(post_body)
-    headers = {"Content-Type": "application/json"}
-    headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
-    response, _ = post_data(url, post_body, headers)
-    LOGGER.debug(f"post_data response is {response}")
+    find_level = body["0008,0052"]
+    find_query = {"PatientID": body["0010,0020"], "PatientName": body["0010,0010"]}
+    orthanc_resources = remote_orthanc.findResources(find_query, level=find_level)
     remote_instances = []
-    for resource in response:
-        remote_instances.extend(getInstancesOfOrthancResource(resource))
-    local_instances, _ = getOrthancInstances(orthanc_uri="http://localhost:{}".format(str(LOCAL_HTTP_PORT)))
-    LOGGER.debug(f"local_instances are {local_instances}")
+    for resource in orthanc_resources:
+        remote_instances.extend(remote_orthanc.getInstancesOfOrthancResource(resource))
+    local_instances = local_orthanc.getOrthancInstances()
     required_instances = set(remote_instances) - set(local_instances)
     LOGGER.debug(f"Required instances not present on this orthanc are: {required_instances}")
-    for instance in remote_instances:
-        fetchOrthancInstances(instance)
-    output.AnswerBuffer('{}', 'application/json')
+    for instance in required_instances:
+        local_orthanc.fetchOrthancInstance(instance)
+    if output is not None:
+        output.AnswerBuffer('{}', 'application/json')
 
 
 """
@@ -221,23 +242,10 @@ def get_data_debug(output, uri_path, **kwargs):
         return answer_content, answer_headers
     return resp.read(), resp.getheaders()
 
+if "orthanc" in sys.modules:
+    orthanc.RegisterRestCallback('/enhancequery', OnFind)
+    orthanc.RegisterOnChangeCallback(OnChange)
+else:
+    sample_body = b'{"0008,0052":"Patient", "0010,0010":"PATIENT C", "0010,0020":""}'
+    OnFind(None,"/enhancequery",body=sample_body)
 
-orthanc.RegisterRestCallback('/enhancequery', OnFind)
-#orthanc.RegisterRestCallback('/debugme', get_data_debug)
-orthanc.RegisterOnChangeCallback(OnChange)
-print(dir(orthanc.ChangeType))
-
-resource1 = {
-      "ID" : "42edd247-21a561e5-f27fc362-81eaf1f4-12cf010d",
-      "IsStable" : False,
-      "LastUpdate" : "20200502T172541",
-      "MainDicomTags" : {
-         "PatientBirthDate" : "1998715",
-         "PatientID" : "11788770005213",
-         "PatientName" : "PATIENT B"
-      },
-      "Studies" : ["22f6c501-e9dcd8c2-52c77194-5c6a9376-b3823f5b"],
-      "Type" : "Patient"
-   }
-
-#print(getInstancesOfOrthancResource(resource1))
