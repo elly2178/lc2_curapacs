@@ -53,18 +53,67 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
     json_body = json_body + json_tuple;
   }
   json_body = json_body + "}";
-  OrthancPluginLogWarning(context, json_body.c_str()); 
+  
+
 
   OrthancPluginErrorCode enhanceError = OrthancPluginRestApiPostAfterPlugins(context, 
                                                                              &temp2,
                                                                              "/enhancequery",
                                                                              json_body.c_str(),
                                                                              strlen(json_body.c_str()));
+
+
   if (enhanceError) {
     return enhanceError;
   }
+  
+ std::string string_data =(char*) temp2.data;
+ Json::Value root;
+ Json::Reader reader;
+
+
+ std::string json_example = "{\"array\": \
+                            [\"item1\", \
+                            \"item2\"], \
+                            \"not an array\": \
+                            \"asdf\" \
+                         }";
+
+ bool parsedSuccess = reader.parse(string_data, 
+                                   root, 
+                                   false);
+
+ if(not parsedSuccess)
+ {
+   // Report failures and their locations 
+   // in the document.
+   OrthancPluginLogWarning(context, "Failed to parse JSON");
+   return OrthancPluginErrorCode_BadJson;
+ }
+
+  
+  OrthancPluginLogWarning(context, (char*) temp2.data);
+  OrthancPluginLogWarning(context, "Iterating over json structure now: ");
+  //OrthancPluginLogWarning(context, root[0].toStyledString().c_str());
+
+  for(unsigned int index=0; index<(uint) root.size(); ++index) {
+    const char* orthanc_resource = root[index].toStyledString().c_str();
+    OrthancPluginMemoryBuffer dicom_buffer;
+    OrthancPluginErrorCode dicom_return_code = OrthancPluginCreateDicom(context, &dicom_buffer,
+                                                 orthanc_resource, NULL, OrthancPluginCreateDicomFlags_None);
+    if (dicom_return_code) {
+      OrthancPluginLogWarning(context, "failed to convert json to DICOM");
+    }
+    //OrthancPluginFindAddAnswer(context, answers, &dicom_buffer.data, dicom_buffer.size);
+    //OrthancPluginLogWarning(context, root[index].toStyledString().c_str());
+  }
+
+  
+
   OrthancPluginFreeMemoryBuffer(context, &temp2);
   return OrthancPluginErrorCode_Success;
+
+
 }
 
 extern "C"

@@ -3,9 +3,7 @@ import base64
 import sys
 import logging
 import requests
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
-
+from pydicom.datadict import keyword_for_tag
 
 LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
 logging_handler = logging.StreamHandler(sys.stdout)
@@ -36,10 +34,10 @@ def post_data(url, data, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
         headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
     if is_json:
         headers.update({"Content-Type": "application/json"})
-        response = requests.post(url, json=data, headers=headers, timeout=HTTP_TIMEOUT)
+        response = requests.post(url, json=data, headers=headers, timeout=timeout)
         return response.json(), response.headers
     else:
-        response = requests.post(url, data=data, headers=headers, timeout=HTTP_TIMEOUT)
+        response = requests.post(url, data=data, headers=headers, timeout=timeout)
         return response.content, response.headers
 
 def get_data(url, headers=None, timeout=HTTP_TIMEOUT):
@@ -51,7 +49,7 @@ def get_data(url, headers=None, timeout=HTTP_TIMEOUT):
     if HTTP_USER:
         headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
     headers.update({"Accept":"application/json"})
-    response = requests.get(url, headers=headers, timeout=HTTP_TIMEOUT)
+    response = requests.get(url, headers=headers, timeout=timeout)
     if response.status_code > 299:
         LOGGER.warning(f"HTTP GET got bad response, status {response.status_code}, content {response.content}")
     elif "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
@@ -71,6 +69,19 @@ def get_http_auth_header(username, password):
     return {"Authorization": "Basic {}".format(b64string.decode())}
 
 class Orthanc:
+
+    valid_keywords_for_retrieve_level = {
+        "patient": ["PatientName", "PatientID", "IssuerOfPatientID",
+                    "PatientBirthDate", "PatientBirthTime", "PatientSex",
+                    "OtherPatientNames", "EthnicGroup", "PatientComments"],
+        "study":   ["StudyDate", "StudyTime", "AccessionNumber",
+                    "ReferringPhysicianName", "StudyDescription",
+                    "NameOfPhysiciansReadingStudy", "AdmittingDiagnosesDescription",
+                    "PatientAge", "PatientSize", "PatientWeight", "Occupation", 
+                    "AdditionalPatientHistory", "StudyInstanceUID", "StudyID"],
+        "series":  ["Modality", "SeriesInstanceUID", "SeriesNumber"],
+        "instance":["SOPInstanceUID", "InstanceNumber"]
+    }
 
     def __init__(self, url, http_user=None, http_password=None, find_limit=25):
         self.url = url
@@ -104,7 +115,7 @@ class Orthanc:
         LOGGER.debug(f"local_instances are {instance_list}")
         return instance_list
 
-    def fetchOrthancInstance(self, instance_id, remote_orthanc_uri=ORTHANC_URI):
+    def fetchOrthancInstance(self, instance_id: str, remote_orthanc_uri=ORTHANC_URI):
         """
         Download DICOM Data of instance with instance_id to local orthanc.
 
@@ -143,7 +154,18 @@ class Orthanc:
         else:
             raise ValueError(f"Resource has unknown Type {resource_type}")
         return instance_list
-    
+
+    def getTagsAndValuesOfOrthancInstance(self, instance_id: str):
+        """
+        Gets DICOM tags and their corresponding value describing an instance from Orthanc
+
+        :param instance_id: Orthanc instance id string
+        :returns: dictionary, each item being a tag/value pair
+        """
+        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags?short=True")
+        LOGGER.debug(f"Got dicom dictionary describing instance {instance_id}: {dicom_dict}")
+        return dicom_dict
+
     def findResources(self, query, level="Patient", limit=None):
         post_body = {"Level": level,
                      "Expand": True,
@@ -151,10 +173,70 @@ class Orthanc:
         if limit is not None:
             post_body.update("limit", self.find_limit)
         content, _ = post_data(f"{self.url}/tools/find", post_body)
-        LOGGER.debug(f"Resources found via /tools/find are {content}")
+        LOGGER.debug(f"Query via {self.url}/tools/find found the following resources: {content}")
         return content
 
-def OnFind(output, uri_path, **kwargs):
+    def getDictFromRequestBody(self, request_body: bytes):
+        try:
+            body_string = request_body.decode()
+        except UnicodeDecodeError:
+            LOGGER.error("Failed to decode bytes received by callback function.")
+            raise
+        try:
+            body_dict = json.loads(body_string)
+        except json.decoder.JSONDecodeError:
+            LOGGER.error(f"Failed to decode JSON structure received by callback function: {body_string}")
+            raise
+        return body_dict
+
+    def getQueryRetrieveLevel(self, request_dict: dict):
+        """
+        :param request_dict: dict containing json structure with a flat dict,
+                             containing keys (dicom tag) and values (tag values)
+                             with info on what is being searched by C-FIND
+        :returns: String describing C-FIND retrieve level
+        """
+        try:
+            retrieve_level = request_dict["0008,0052"].lower()
+        except IndexError:
+            LOGGER.error(f"Unable to determine C-FIND retrieve level from callback. request_dict: {request_dict}")
+            raise
+        retrieve_level = "instance" if retrieve_level == "image" else retrieve_level
+        if retrieve_level not in ["patient", "study", "series", "instance"]:
+            LOGGER.error(f"Unknown QueryRetrieveLevel found: {retrieve_level}")
+            raise ValueError()
+        return retrieve_level
+
+    def collateFindQuery(self, request_dict: dict):
+        """
+        Reads request_dict and creates query dict required by findResources method.
+        The resulting query can only contain tags allowed by the given retrieve level.
+        Any tag not in valid_keywords_for_retrieve_level will be dropped.
+
+        :param request_dict: dict containing json structure with a flat dict,
+                             containing keys (dicom tag) and values (tag values)
+                             with info on what is being searched by C-FIND
+        :returns: flat dict containing query string as used by /tools/find
+        """
+        find_query = {}
+        irrelevant_keywords = ["QueryRetrieveLevel"]
+        retrieve_level = self.getQueryRetrieveLevel(request_dict).lower()
+        for dicom_tag, dicom_value in request_dict.items():
+            dicom_group, dicom_element = dicom_tag.split(",")
+            try:
+                hex_tag = int(f"{dicom_group}{dicom_element}", 16)
+            except ValueError:
+                LOGGER.error(f"Failed to convert dicom_group ({dicom_group}) " +\
+                             f"or dicom_element ({dicom_element}) to hex value.")
+                raise ValueError()
+            dicom_keyword = keyword_for_tag(hex_tag)
+            if dicom_keyword not in irrelevant_keywords and \
+                    dicom_keyword in Orthanc.valid_keywords_for_retrieve_level[retrieve_level]:
+                find_query[dicom_keyword] = dicom_value
+        return find_query
+
+        
+def enhance_query(output, uri_path, **kwargs):
     LOGGER.debug(f"{uri_path} called with body: {kwargs['body']}")
     local_orthanc = Orthanc(f"http://localhost:{LOCAL_HTTP_PORT}",
                             http_user=HTTP_USER,
@@ -163,62 +245,41 @@ def OnFind(output, uri_path, **kwargs):
                              http_user=HTTP_USER,
                              http_password=HTTP_PASSWORD)
     
-    body = json.loads(kwargs["body"])
-    find_level = body["0008,0052"]
-    find_query = {"PatientID": body["0010,0020"], "PatientName": body["0010,0010"]}
-    orthanc_resources = remote_orthanc.findResources(find_query, level=find_level)
+    request_body_dict = local_orthanc.getDictFromRequestBody(kwargs["body"])
+    LOGGER.debug(f"request body decoded to: {request_body_dict}")
+    find_level = local_orthanc.getQueryRetrieveLevel(request_body_dict)
+    find_query = local_orthanc.collateFindQuery(request_body_dict)
+
+    remote_orthanc_resources_found = remote_orthanc.findResources(find_query, level=find_level)
     remote_instances = []
-    for resource in orthanc_resources:
+    for resource in remote_orthanc_resources_found:
         remote_instances.extend(remote_orthanc.getInstancesOfOrthancResource(resource))
-    local_instances = local_orthanc.getOrthancInstances()
-    required_instances = set(remote_instances) - set(local_instances)
-    LOGGER.debug(f"Required instances not present on this orthanc are: {required_instances}")
-    for instance in required_instances:
-        local_orthanc.fetchOrthancInstance(instance)
+    
+    local_orthanc_resources_found = local_orthanc.findResources(find_query, level=find_level)
+    local_instances = []
+    for resource in local_orthanc_resources_found:
+        local_instances.extend(local_orthanc.getInstancesOfOrthancResource(resource))
+    
+    strictly_remote_instances = set(remote_instances) - set(local_instances)
+    strictly_local_instances = set(local_instances) - set(remote_instances)
+    intersecting_instances = set(local_instances) & set(remote_instances)
+    LOGGER.debug(f"Required instances not present on local orthanc are: {strictly_remote_instances}")
+
+    dicom_list = []
+    for instance in strictly_remote_instances:
+        dicom_list.append(remote_orthanc.getTagsAndValuesOfOrthancInstance(instance))
+    
+    for instance in strictly_local_instances | intersecting_instances:
+        dicom_list.append(local_orthanc.getTagsAndValuesOfOrthancInstance(instance))
+
     if output is not None:
-        output.AnswerBuffer('{}', 'application/json')
+        #output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
+        output.AnswerBuffer(json.dumps(dicom_list), 'application/json')
+        #https://sdk.orthanc-server.com/group__Toolbox.html#ga88726ae4c968c1151a01a8a770d7b90e
+        #https://sdk.orthanc-server.com/group__DicomCallbacks.html#ga71ccca51dbfa489b0e4f0899e791200c
 
-
-"""
-Retrieve Level Patient
-(0010,0010) PatientName
-(0010,0020) PatientID
-(0010,0021) IssuerOfPatientID
-(0010,0030) PatientBirthDate
-(0010,0032) PatientBirthTime
-(0010,0040) PatientSex
-(0010,1000) OtherPatientIDs (retired)
-(0010,1001) OtherPatientNames
-(0010,2160) EthnicGroup
-(0010,4000) PatientComments
-
-Retrieve Level Study
-(0008,0020) StudyDate
-(0008,0030) StudyTime
-(0008,0050) AccessionNumber
-(0008,0090) ReferringPhysicianName
-(0008,1030) StudyDescription
-(0008,1060) NameOfPhysiciansReadingStudy
-(0008,1080) AdmittingDiagnosesDescription
-(0010,1010) PatientAge
-(0010,1020) PatientSize
-(0010,1030) PatientWeight
-(0010,2180) Occupation
-(0010,21B0) AdditionalPatientHistory
-(0020,000D) StudyInstanceUID
-(0020,0010) StudyID
-(0020,1070) RETIRED_OtherStudyNumbers
-
-Retrieve Level Series
-(0008,0060) Modality
-(0020,000E) SeriesInstanceUID
-(0020,0011) SeriesNumber
-
-Retrieve Level Image
-(0008,0018) SOPInstanceUID
-(0020,0013) InstanceNumber
-"""
-
+def enhance_c_move():
+    pass
 
 def OnChange(changeType, level, resource):
     if changeType == orthanc.ChangeType.NEW_INSTANCE:
@@ -227,25 +288,15 @@ def OnChange(changeType, level, resource):
         LOGGER.debug(f"Uploading instance {resource} to peer {PEER_NAME}")
         result = orthanc.RestApiPost("/peers/{}/store".format(PEER_NAME), body)
 
-
-def get_data_debug(output, uri_path, **kwargs):
-    url = 'http://localhost:8042/instances'
-    headers = {'Content-Type':'application/json'}
-    headers.update(get_http_auth_header(HTTP_USER, HTTP_PASSWORD))
-    LOGGER.debug(f"get_data called with args: {url} and headers {headers}")
-    req = Request(url, headers=headers)
-    resp = urlopen(req)
-    if "Content-Type" in headers.keys() and headers["Content-Type"] == "application/json":
-        answer_content = json.loads(resp.read().decode())
-        answer_headers = resp.getheaders()
-        LOGGER.debug(f"get_data got response with headers: {answer_headers}")
-        return answer_content, answer_headers
-    return resp.read(), resp.getheaders()
-
 if "orthanc" in sys.modules:
-    orthanc.RegisterRestCallback('/enhancequery', OnFind)
+    orthanc.RegisterRestCallback('/enhancequery', enhance_query)
     orthanc.RegisterOnChangeCallback(OnChange)
 else:
     sample_body = b'{"0008,0052":"Patient", "0010,0010":"PATIENT C", "0010,0020":""}'
-    OnFind(None,"/enhancequery",body=sample_body)
+    enhance_query(None, "/enhancequery", body=sample_body)
 
+
+
+#output methods: 'AnswerBuffer', 'CompressAndAnswerJpegImage', 'CompressAndAnswerPngImage', 'Redirect',\
+#  'SendHttpStatus', 'SendHttpStatusCode', 'SendMethodNotAllowed', 'SendMultipartItem', 'SendUnauthorized',\
+#  'SetCookie', 'SetHttpErrorDetails', 'SetHttpHeader', 'StartMultipartAnswer'
