@@ -35,7 +35,12 @@ def post_data(url, data, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
     if is_json:
         headers.update({"Content-Type": "application/json"})
         response = requests.post(url, json=data, headers=headers, timeout=timeout)
-        return response.json(), response.headers
+        try: 
+            json_response = response.json()
+        except JSONDecodeError:
+            LOGGER.error(f"Data received by post_data is malformed json structure ({response}).")
+            json_response = {}
+        return json_response, response.headers
     else:
         response = requests.post(url, data=data, headers=headers, timeout=timeout)
         return response.content, response.headers
@@ -99,7 +104,7 @@ class Orthanc:
         :returns: dict containing metadata (including IDs of child resources) of resource
         """
         LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
-                    "resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
+                    f"resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
         if resource_type == "Study":
             return get_data(f"{orthanc_uri}/studies/{resource_id}")
         elif resource_type == "Series":
@@ -162,7 +167,7 @@ class Orthanc:
         :param instance_id: Orthanc instance id string
         :returns: dictionary, each item being a tag/value pair
         """
-        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags?short=True")
+        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags") #?short=True
         LOGGER.debug(f"Got dicom dictionary describing instance {instance_id}: {dicom_dict}")
         return dicom_dict
 
@@ -250,10 +255,14 @@ def enhance_query(output, uri_path, **kwargs):
     find_level = local_orthanc.getQueryRetrieveLevel(request_body_dict)
     find_query = local_orthanc.collateFindQuery(request_body_dict)
 
-    remote_orthanc_resources_found = remote_orthanc.findResources(find_query, level=find_level)
-    remote_instances = []
-    for resource in remote_orthanc_resources_found:
-        remote_instances.extend(remote_orthanc.getInstancesOfOrthancResource(resource))
+    try:
+        remote_instances = []
+        remote_orthanc_resources_found = remote_orthanc.findResources(find_query, level=find_level)
+    except (requests.ConnectTimeout, requests.ConnectionError):
+        LOGGER.error(f"Failed to connect to {remote_orthanc.url} to query for resources.")
+    else:
+        for resource in remote_orthanc_resources_found:
+            remote_instances.extend(remote_orthanc.getInstancesOfOrthancResource(resource))
     
     local_orthanc_resources_found = local_orthanc.findResources(find_query, level=find_level)
     local_instances = []
@@ -266,17 +275,24 @@ def enhance_query(output, uri_path, **kwargs):
     LOGGER.debug(f"Required instances not present on local orthanc are: {strictly_remote_instances}")
 
     dicom_list = []
-    for instance in strictly_remote_instances:
-        dicom_list.append(remote_orthanc.getTagsAndValuesOfOrthancInstance(instance))
-    
+    try:
+        for instance in strictly_remote_instances:
+            dicom_list.append(remote_orthanc.getTagsAndValuesOfOrthancInstance(instance))
+    except (requests.ConnectTimeout, requests.ConnectionError):
+        LOGGER.error(f"Failed to connect to {remote_orthanc.url} to get dicom data for instances.")
+
     for instance in strictly_local_instances | intersecting_instances:
         dicom_list.append(local_orthanc.getTagsAndValuesOfOrthancInstance(instance))
 
+    dicom_list_as_json = json.dumps(dicom_list)
+    LOGGER.debug(f"Returning list of dicom dicts to caller: {dicom_list_as_json}")
+
     if output is not None:
-        #output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
-        output.AnswerBuffer(json.dumps(dicom_list), 'application/json')
+        output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
+        #output.AnswerBuffer(dicom_list_as_json, 'application/json')
         #https://sdk.orthanc-server.com/group__Toolbox.html#ga88726ae4c968c1151a01a8a770d7b90e
         #https://sdk.orthanc-server.com/group__DicomCallbacks.html#ga71ccca51dbfa489b0e4f0899e791200c
+
 
 def enhance_c_move():
     pass
@@ -294,7 +310,6 @@ if "orthanc" in sys.modules:
 else:
     sample_body = b'{"0008,0052":"Patient", "0010,0010":"PATIENT C", "0010,0020":""}'
     enhance_query(None, "/enhancequery", body=sample_body)
-
 
 
 #output methods: 'AnswerBuffer', 'CompressAndAnswerJpegImage', 'CompressAndAnswerPngImage', 'Redirect',\
