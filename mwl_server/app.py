@@ -42,6 +42,15 @@ class Worklist():
             self.json = loads(json)
 
     def create_worklist_from_json(self, json: dict):
+        """
+        A worklist is created using a json structure. This file contains the data
+        of the Patient, de modality,accession number and can be modified as much as desired.
+        First, the method checks if all the tags are present and if the rules of 
+        the tags are correct. Finally, the dataset gets written to disk. 
+
+        :param json: referes to the json file that will be created. Type: dictonary 
+        :returns: sha1 hash of filename created
+        """
         for key, value in Worklist.flattenIterable(json):
             for rule in Worklist.ruleset:
                 if key in rule.keys():
@@ -54,6 +63,12 @@ class Worklist():
 
     @staticmethod
     def flattenIterable(someiterable):
+        """
+        Unpacks lists, dictionaries and stores all the Data from them in a temporary List.
+        With each itteration, the list gets appended. 
+
+        :param someiterable: any element type
+        :returns: list of elementws"""
         flattened_list = []
         if isinstance(someiterable, list):
             for item in someiterable:
@@ -73,6 +88,8 @@ class Worklist():
         dont ask, just enjoy
         iterate through json structure containing information on existing worklists
         and replace all occurrences of dicom tags with their corresponding keywords.
+
+        :param worklist_dict: dictonary that contains the worklist elements
         """
         keyword_dict = copy.deepcopy(worklist_dict)
         for key, value in worklist_dict.items():
@@ -92,6 +109,10 @@ class Worklist():
         return keyword_dict
 
     def create_available_worklists_response_dict(self):
+        """
+        Method creates a list of all the available worklists. 
+        :returns: serialize obj to a Json formatted string uding conversion table 
+        """
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
             hashed_filename = self.hashme(worklist_filename)
@@ -106,10 +127,15 @@ class Worklist():
 
     def hashme(self, string_to_hash):
         LOGGER.debug(f"Worklist from file {string_to_hash} has been hashed")
-        return hashlib.sha1(string_to_hash.encode("utf-8")).hexdigest()
+        hashed_code = hashlib.sha1(string_to_hash.encode("utf-8")).hexdigest()
+        return hashed_code
 
     def get_current_worklists(self):
-        # os.scandir --> scanns all the files in a directory
+        """
+        Gets the worklists that are locally stored. Puts them in a temporary list. Targets
+        only the files with a specific suffix
+
+        :returns: the temporary list that contains """
         modality_worklist_dir_files = os.scandir(Worklist.modality_worklist_path)
         worklist_list = []
         with modality_worklist_dir_files as existing_files:
@@ -188,7 +214,11 @@ class Worklist():
         return pydicom_json
 
     def check_required_tags(self):
-        """checks if all required json keys are present as defined by Worklist.ruleset --> constraints"""
+        """
+        Verifies if all the required json keys are present and 
+        respects all the given constraints
+        
+        :returns: True if all the constraints are correct """
         json_keys = [json_tuple[0] for json_tuple in Worklist.flattenIterable(self.json)]
         LOGGER.debug(f"json_keys are {json_keys}")
         for rule in Worklist.ruleset:
@@ -213,8 +243,26 @@ class Worklist():
 
     def generateStudyID(self):
         return generate_uid()
-     
+    
+    def http_delete(self, hashed_code: str):
+        """ 
+        Delete the desired Worklist with the hash hashed_code
 
+        :param hashed_code: str hashed information of the worklist to be deleted 
+        """
+        # get the list of existing worklists
+        # compare hashed_code local to given hashed_code for each element in worklists
+        for filename_of_exsisting_worklist in self.get_current_worklists():
+            if self.hashme(filename_of_exsisting_worklist) == hashed_code:
+                os.remove(os.path.join(Worklist.modality_worklist_path, filename_of_exsisting_worklist))
+                break
+        else:
+            LOGGER.error(f"User ordered deletion of non existing worklist (hash {hashed_code})")
+            raise FileNotFoundError(f"The worklist corresponding to hash {hashed_code} does not exist.")
+        
+        return hashed_code
+
+      
 if __name__ == "__main__":
     json1 = {
     "PatientID": "11788770005213",
@@ -235,11 +283,18 @@ if __name__ == "__main__":
     "ScheduledPerformingPhysicianName": "Max^Messermann"
     }]
     }
-    someworklist = Worklist(json1)
+    someworklist = Worklist(dumps(json1))
     print(someworklist.create_available_worklists_response_dict())
 
 
 def worklist_worker(output, uri_path, **kwargs):
+    """
+    Uses methods GET, POST as a response to the server/ user.
+    With Delete, allows a worklist to be deleted
+    :param output: 
+    :param **kwargs: key word argumants 
+    """
+    print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
         myworklist = Worklist()
         worklists = myworklist.create_available_worklists_response_dict()
@@ -248,5 +303,21 @@ def worklist_worker(output, uri_path, **kwargs):
         myworklist = Worklist(json=kwargs["body"])
         response_dict = myworklist.create_worklist_from_json(myworklist.json)
         output.AnswerBuffer(str(response_dict), 'application/json')
+    elif kwargs["method"] == "DELETE":
+        try:
+            hashed_id_of_worklist = kwargs['groups'][0]
+            print(hashed_id_of_worklist)
+        except IndexError:
+            LOGGER.error("Hashed Nr for Worklist to delete not given")
+            raise
+        myworklist = Worklist()
+        try:
+            myworklist.http_delete(hashed_id_of_worklist)
+        except FileNotFoundError as error:        
+            output.SendHttpStatus(400, f"{error}", len(str(error)))
+            return
+        output.AnswerBuffer("{}", 'application/json')
+
 
 orthanc.RegisterRestCallback('/worklists', worklist_worker)
+orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
