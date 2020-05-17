@@ -37,7 +37,7 @@ def post_data(url, data, headers=None, timeout=HTTP_TIMEOUT, is_json=True):
         response = requests.post(url, json=data, headers=headers, timeout=timeout)
         try: 
             json_response = response.json()
-        except JSONDecodeError:
+        except json.JSONDecodeError:
             LOGGER.error(f"Data received by post_data is malformed json structure ({response}).")
             json_response = {}
         return json_response, response.headers
@@ -57,6 +57,7 @@ def get_data(url, headers=None, timeout=HTTP_TIMEOUT):
     response = requests.get(url, headers=headers, timeout=timeout)
     if response.status_code > 299:
         LOGGER.warning(f"HTTP GET got bad response, status {response.status_code}, content {response.content}")
+        raise requests.ConnectionError()
     elif "Content-Type" in response.headers and "application/json" in response.headers["Content-Type"]:
         LOGGER.debug("HTTP GET received JSON structure.")
         return response.json(), response.headers
@@ -82,7 +83,7 @@ class Orthanc:
         "study":   ["StudyDate", "StudyTime", "AccessionNumber",
                     "ReferringPhysicianName", "StudyDescription",
                     "NameOfPhysiciansReadingStudy", "AdmittingDiagnosesDescription",
-                    "PatientAge", "PatientSize", "PatientWeight", "Occupation", 
+                    "PatientAge", "PatientSize", "PatientWeight", "Occupation",
                     "AdditionalPatientHistory", "StudyInstanceUID", "StudyID"],
         "series":  ["Modality", "SeriesInstanceUID", "SeriesNumber"],
         "instance":["SOPInstanceUID", "InstanceNumber"]
@@ -94,7 +95,7 @@ class Orthanc:
         self.http_password = http_password
         self.find_limit = find_limit
 
-    def getOrthancResource(self, resource_type, resource_id, orthanc_uri=ORTHANC_URI):
+    def getOrthancResource(self, resource_type, resource_id):
         """
         Given the Orthanc ID of a resource (Study/Series), return a resource dict
         containing metadata (including child resources) of resource
@@ -104,11 +105,19 @@ class Orthanc:
         :returns: dict containing metadata (including IDs of child resources) of resource
         """
         LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
-                    f"resource_id: {resource_id}, orthanc_uri: {orthanc_uri}")
+                    f"resource_id: {resource_id}, orthanc_uri: {self.url}")
         if resource_type == "Study":
-            return get_data(f"{orthanc_uri}/studies/{resource_id}")
+            query_subpath = "studies"
         elif resource_type == "Series":
-            return get_data(f"{orthanc_uri}/series/{resource_id}")
+            query_subpath = "series"
+        else:
+            raise ValueError(f"Unknown resource type requested ({resource_type})")
+        try:
+            content, headers = get_data(f"{self.url}/{query_subpath}/{resource_id}")
+        except (requests.ConnectionError, requests.ConnectTimeout):
+            LOGGER.error(f"Orthanc failed to respond to resource query.")
+            content, headers = {}, {}
+        return (content, headers)
 
     def getOrthancInstances(self):
         """
@@ -160,28 +169,59 @@ class Orthanc:
             raise ValueError(f"Resource has unknown Type {resource_type}")
         return instance_list
 
+    def filterTagsAndValuesOfOrthancInstance(self, dicom_dict):
+        """
+        Filter out json values that cause exceptions in orthanc when
+        json is converted to DICOM file.
+        """
+        unneed_tags = ["7fe0,0010", "0002,0002"]
+        LOGGER.debug(f"Filtering out tags from json structure: {unneed_tags}")
+        for tag in unneed_tags:
+            try:
+                del dicom_dict[tag]
+            except KeyError:
+                pass
+        return dicom_dict
+
     def getTagsAndValuesOfOrthancInstance(self, instance_id: str):
         """
-        Gets DICOM tags and their corresponding value describing an instance from Orthanc
+        Gets DICOM tags and their corresponding value describing an instance from Orthanc.
+        The "short" parameter makes orthanc return a flat dict of tags: value representing
+        all DICOM tags of the instance.
 
         :param instance_id: Orthanc instance id string
         :returns: dictionary, each item being a tag/value pair
         """
-        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags") #?short=True
+        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags?short=True")
         LOGGER.debug(f"Got dicom dictionary describing instance {instance_id}: {dicom_dict}")
+        dicom_dict = self.filterTagsAndValuesOfOrthancInstance(dicom_dict)
         return dicom_dict
 
     def findResources(self, query, level="Patient", limit=None):
+        """
+        Does a find request over the orthanc REST API (see https://api.orthanc-server.com/#tag/Find)
+        
+        :param query: dictionary containing query, see collateFindQuery
+        :param level: corresponds to C-FIND retrieve level
+        :param limit: cut off after X amount of results
+        """
         post_body = {"Level": level,
                      "Expand": True,
                      "Query": query}
         if limit is not None:
             post_body.update("limit", self.find_limit)
+        LOGGER.debug(f"Searching resources at level {level} and query {query}")
         content, _ = post_data(f"{self.url}/tools/find", post_body)
         LOGGER.debug(f"Query via {self.url}/tools/find found the following resources: {content}")
         return content
 
     def getDictFromRequestBody(self, request_body: bytes):
+        """
+        Reads the the POST body as sent by orthanc when calling this plugin
+
+        :param request_body: bytestring, should contain valid json
+        :returns: dictionary loaded from json
+        """
         try:
             body_string = request_body.decode()
         except UnicodeDecodeError:
@@ -252,6 +292,7 @@ def enhance_query(output, uri_path, **kwargs):
     
     request_body_dict = local_orthanc.getDictFromRequestBody(kwargs["body"])
     LOGGER.debug(f"request body decoded to: {request_body_dict}")
+
     find_level = local_orthanc.getQueryRetrieveLevel(request_body_dict)
     find_query = local_orthanc.collateFindQuery(request_body_dict)
 
@@ -262,17 +303,22 @@ def enhance_query(output, uri_path, **kwargs):
         LOGGER.error(f"Failed to connect to {remote_orthanc.url} to query for resources.")
     else:
         for resource in remote_orthanc_resources_found:
-            remote_instances.extend(remote_orthanc.getInstancesOfOrthancResource(resource))
+            instance_list = remote_orthanc.getInstancesOfOrthancResource(resource)
+            LOGGER.debug(f"Instances found for remote resource: {instance_list}")
+            remote_instances.extend(instance_list)
     
     local_orthanc_resources_found = local_orthanc.findResources(find_query, level=find_level)
     local_instances = []
     for resource in local_orthanc_resources_found:
-        local_instances.extend(local_orthanc.getInstancesOfOrthancResource(resource))
+        instance_list = local_orthanc.getInstancesOfOrthancResource(resource)
+        LOGGER.debug(f"Instances found for local resource: {instance_list}")
+        local_instances.extend(instance_list)
     
     strictly_remote_instances = set(remote_instances) - set(local_instances)
     strictly_local_instances = set(local_instances) - set(remote_instances)
     intersecting_instances = set(local_instances) & set(remote_instances)
     LOGGER.debug(f"Required instances not present on local orthanc are: {strictly_remote_instances}")
+    LOGGER.debug(f"Instances present on both local and remote ortanc are: {intersecting_instances}")
 
     dicom_list = []
     try:
@@ -288,10 +334,9 @@ def enhance_query(output, uri_path, **kwargs):
     LOGGER.debug(f"Returning list of dicom dicts to caller: {dicom_list_as_json}")
 
     if output is not None:
-        output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
-        #output.AnswerBuffer(dicom_list_as_json, 'application/json')
-        #https://sdk.orthanc-server.com/group__Toolbox.html#ga88726ae4c968c1151a01a8a770d7b90e
-        #https://sdk.orthanc-server.com/group__DicomCallbacks.html#ga71ccca51dbfa489b0e4f0899e791200c
+        #output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
+        output.AnswerBuffer(dicom_list_as_json, 'application/json')
+
 
 
 def enhance_c_move():

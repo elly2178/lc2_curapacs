@@ -67,12 +67,10 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
     return enhanceError;
   }
 
- char * sample_json_big = "[{\"00100021\":{\"vr\":\"LO\",\"Value\":[\"Hospital A\"]}}]";
- char * sample_json = "{}";
+ //char * sample_json_big = "[{\"00100021\":{\"vr\":\"LO\",\"Value\":[\"Hospital A\"]}}]";
+ //const char * sample_json_list = "[{\"00100021\":\"Hospital A\"}]";
 
- //std::string string_data = (char*) temp2.data;
- std::string string_data = sample_json_big;
- //std::string string_data_cropped = string_data.substr(0,string_data.length());
+ std::string string_data = (char*) temp2.data;
  Json::Value root;
  Json::Reader reader;
  Json::FastWriter writer;
@@ -83,45 +81,25 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
    OrthancPluginLogWarning(context, "Failed to parse JSON");
    return OrthancPluginErrorCode_BadJson;
  }
-
-    Json::FastWriter writer;
-    std::string s = writer.write(root[0]);
-
-
-  OrthancPluginLogWarning(context, "Iterating over json structure now: ");
-  OrthancPluginLogWarning(context, root[0].toStyledString().c_str());
-  OrthancPluginLogWarning(context, "##############################################");
-  OrthancPluginMemoryBuffer dicom_buffer2;
-  OrthancPluginErrorCode dicom_return_code2 = OrthancPluginCreateDicom(context, &dicom_buffer2,
-                                                 root[0].toStyledString().c_str(), NULL, OrthancPluginCreateDicomFlags_DecodeDataUriScheme);
-  if (dicom_return_code2) {
-      OrthancPluginLogWarning(context, "Failed to convert json to DICOM");
-    }
-    OrthancPluginLogWarning(context, "##############################################");
-
-    OrthancPluginFindAddAnswer(context, answers, &dicom_buffer2.data, root[0].size());
-
-  OrthancPluginFreeMemoryBuffer(context, &dicom_buffer2);
+ 
   OrthancPluginLogWarning(context, "##############################################");
 
-/*
   for(unsigned int index=0; index<(uint) root.size(); ++index) {
     std::string tags_string = writer.write(root[index]);
-    OrthancPluginLogWarning(context, tags_string.c_str());
+    OrthancPluginLogWarning(context, strcat("Adding dict to answers: ", tags_string.c_str()));
     OrthancPluginMemoryBuffer dicom_buffer;
     OrthancPluginErrorCode dicom_return_code = OrthancPluginCreateDicom(context, &dicom_buffer,
                                                  tags_string.c_str(), NULL, OrthancPluginCreateDicomFlags_None);
     if (dicom_return_code) {
       OrthancPluginLogWarning(context, "Failed to convert json to DICOM");
+    } else
+    {
+      OrthancPluginFindAddAnswer(context, answers, dicom_buffer.data, dicom_buffer.size);
+      OrthancPluginFreeMemoryBuffer(context, &dicom_buffer); 
     }
-    OrthancPluginFindAddAnswer(context, answers, &dicom_buffer.data, dicom_buffer.size);
   }
-*/
-
   OrthancPluginFreeMemoryBuffer(context, &temp2);
   return OrthancPluginErrorCode_Success;
-
-
 }
 
 extern "C"
