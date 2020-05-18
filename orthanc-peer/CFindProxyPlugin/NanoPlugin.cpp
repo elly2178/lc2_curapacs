@@ -85,8 +85,9 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
   OrthancPluginLogWarning(context, "##############################################");
 
   for(unsigned int index=0; index<(uint) root.size(); ++index) {
+    OrthancPluginLogWarning(context, "Working over JSON structure.");
     std::string tags_string = writer.write(root[index]);
-    OrthancPluginLogWarning(context, strcat("Adding dict to answers: ", tags_string.c_str()));
+    OrthancPluginLogWarning(context, tags_string.c_str());
     OrthancPluginMemoryBuffer dicom_buffer;
     OrthancPluginErrorCode dicom_return_code = OrthancPluginCreateDicom(context, &dicom_buffer,
                                                  tags_string.c_str(), NULL, OrthancPluginCreateDicomFlags_None);

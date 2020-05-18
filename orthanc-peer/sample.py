@@ -3,7 +3,7 @@ import base64
 import sys
 import logging
 import requests
-from pydicom.datadict import keyword_for_tag
+from pydicom.datadict import keyword_for_tag, tag_for_keyword
 
 LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
 logging_handler = logging.StreamHandler(sys.stdout)
@@ -106,10 +106,14 @@ class Orthanc:
         """
         LOGGER.debug(f"getOrthancResource called with args: resource_type: {resource_type}, " + \
                     f"resource_id: {resource_id}, orthanc_uri: {self.url}")
-        if resource_type == "Study":
+        if resource_type.lower() == "patient":
+            query_subpath = "patients"
+        elif resource_type.lower() == "study":
             query_subpath = "studies"
-        elif resource_type == "Series":
+        elif resource_type.lower() == "series":
             query_subpath = "series"
+        elif resource_type.lower() == "instance":
+            query_subpath = "instances"
         else:
             raise ValueError(f"Unknown resource type requested ({resource_type})")
         try:
@@ -119,6 +123,20 @@ class Orthanc:
             content, headers = {}, {}
         return (content, headers)
 
+    def getMainDicomTagsForOrthancResource(self, resource):
+        """
+        Given a resource dict grabbed from orthanc, returns a dict of its tags (numeric)
+        & values describing the resource
+        """
+        try:
+            main_dicom_tags_dict = resource["MainDicomTags"]
+        except KeyError:
+            LOGGER.error(f"Resource did not contain MainDicomTags: {resource}")
+        for keyword in resource["MainDicomTags"].keys():
+            numeric_tag = keyword_for_tag(keyword)
+            main_dicom_tags_dict[numeric_tag] = main_dicom_tags_dict.pop(keyword)
+        return main_dicom_tags_dict
+        
     def getOrthancInstances(self):
         """
         Ask remote orthanc API for a complete list of all available instance IDs.
@@ -141,49 +159,48 @@ class Orthanc:
         content, _ = get_data(f"{remote_orthanc_uri}/instances/{instance_id}/file")
         post_data(f"{self.url}/instances", content, is_json=False)
 
-    def getInstancesOfOrthancResource(self, resource):
+    def getSubresourcesOfOrthancResource(self, resource: dict, level: str):
         """
-        Recurse downwards (Patient -> Study -> Series -> Instance) returning all instances.
-
-        :param param1: dict as returned by orthanc/tools/find, contains infos on resource
-        :returns: list of orthanc instance IDs of the resource
+        Recurse downwards (Patient -> Study -> Series -> Instance) returning all subresources
+        of type level
+         
+        :param resource: dict as returned by orthanc/tools/find, contains infos on resource
+        :param level: string as returned by getQueryRetrieveLevel
+        :returns: list of dicts of orthanc resources
         """
-        LOGGER.debug(f"getInstancesOfOrthancResource called with args {resource}")
-        instance_list = []
+        LOGGER.debug(f"getSubresourcesOfOrthancResource called with args {resource}, {level}")
+        resource_list = []
         try:
             resource_type = resource["Type"]
         except KeyError:
-            return instance_list
+            LOGGER.error(f"Key 'Type' not found in resource: {resource}")
+            return resource_list
         if resource_type == "Patient":
-            for study_id in resource["Studies"]:
-                study_resource, _ = self.getOrthancResource("Study", study_id)
-                instance_list = self.getInstancesOfOrthancResource(study_resource)
+            if level == "patient":
+                return [resource]
+            else:
+                for study_id in resource["Studies"]:
+                    study_resource, _ = self.getOrthancResource("Study", study_id)
+                    resource_list.extend(self.getSubresourcesOfOrthancResource(study_resource, level))
         elif resource_type == "Study":
-            for series_id in resource["Series"]:
-                series_resource, _ = self.getOrthancResource("Series", series_id)
-                instance_list = self.getInstancesOfOrthancResource(series_resource)
+            if level == "study":
+                return [resource]
+            else:
+                for series_id in resource["Series"]:
+                    series_resource, _ = self.getOrthancResource("Series", series_id)
+                    resource_list.extend(self.getSubresourcesOfOrthancResource(series_resource, level))
         elif resource_type == "Series":
-            instance_list.extend(resource["Instances"])
-            return instance_list
+            if level == "series":
+                return [resource]
+            else:
+                for instance_id in resource["Instances"]:
+                    instance_resource, _ = self.getOrthancResource("Instance", instance_id)
+                    resource_list.extend(instance_resource)
         else:
             raise ValueError(f"Resource has unknown Type {resource_type}")
-        return instance_list
+        return resource_list
 
-    def filterTagsAndValuesOfOrthancInstance(self, dicom_dict):
-        """
-        Filter out json values that cause exceptions in orthanc when
-        json is converted to DICOM file.
-        """
-        unneed_tags = ["7fe0,0010", "0002,0002"]
-        LOGGER.debug(f"Filtering out tags from json structure: {unneed_tags}")
-        for tag in unneed_tags:
-            try:
-                del dicom_dict[tag]
-            except KeyError:
-                pass
-        return dicom_dict
-
-    def getTagsAndValuesOfOrthancInstance(self, instance_id: str):
+    def getTagsAndValuesOfOrthancResource(self, resource_id: str, level: str):
         """
         Gets DICOM tags and their corresponding value describing an instance from Orthanc.
         The "short" parameter makes orthanc return a flat dict of tags: value representing
@@ -192,12 +209,24 @@ class Orthanc:
         :param instance_id: Orthanc instance id string
         :returns: dictionary, each item being a tag/value pair
         """
-        dicom_dict, _ = get_data(self.url + f"/instances/{instance_id}/tags?short=True")
-        LOGGER.debug(f"Got dicom dictionary describing instance {instance_id}: {dicom_dict}")
-        dicom_dict = self.filterTagsAndValuesOfOrthancInstance(dicom_dict)
+        try:
+            if level == "patient":
+                dicom_dict, _ = get_data(self.url + f"/patients/{resource_id}/shared-tags?short=True")
+            elif level == "study":
+                dicom_dict, _ = get_data(self.url + f"/studies/{resource_id}/shared-tags?short=True")
+            elif level == "series":
+                dicom_dict, _ = get_data(self.url + f"/series/{resource_id}/shared-tags?short=True")
+            elif level == "instance":
+                dicom_dict, _ = get_data(self.url + f"/instances/{resource_id}/tags?short=True")
+            else:
+                raise ValueError(f"Unknown find level {level}")
+        except requests.ConnectionError:
+            LOGGER.error(f"Failed to retrieve dicom resource {resource_id} from {self.url}")
+            return {}
+        LOGGER.debug(f"Got dicom dictionary describing resource {resource_id}: {dicom_dict.keys()}")
         return dicom_dict
 
-    def findResources(self, query, level="Patient", limit=None):
+    def findResources(self, query, level, limit=None):
         """
         Does a find request over the orthanc REST API (see https://api.orthanc-server.com/#tag/Find)
         
@@ -234,7 +263,8 @@ class Orthanc:
             raise
         return body_dict
 
-    def getQueryRetrieveLevel(self, request_dict: dict):
+    @staticmethod
+    def getQueryRetrieveLevel(request_dict: dict):
         """
         :param request_dict: dict containing json structure with a flat dict,
                              containing keys (dicom tag) and values (tag values)
@@ -252,7 +282,8 @@ class Orthanc:
             raise ValueError()
         return retrieve_level
 
-    def collateFindQuery(self, request_dict: dict):
+    @staticmethod
+    def collateFindQuery(request_dict: dict):
         """
         Reads request_dict and creates query dict required by findResources method.
         The resulting query can only contain tags allowed by the given retrieve level.
@@ -265,7 +296,7 @@ class Orthanc:
         """
         find_query = {}
         irrelevant_keywords = ["QueryRetrieveLevel"]
-        retrieve_level = self.getQueryRetrieveLevel(request_dict).lower()
+        retrieve_level = Orthanc.getQueryRetrieveLevel(request_dict).lower()
         for dicom_tag, dicom_value in request_dict.items():
             dicom_group, dicom_element = dicom_tag.split(",")
             try:
@@ -275,12 +306,54 @@ class Orthanc:
                              f"or dicom_element ({dicom_element}) to hex value.")
                 raise ValueError()
             dicom_keyword = keyword_for_tag(hex_tag)
-            if dicom_keyword not in irrelevant_keywords and \
-                    dicom_keyword in Orthanc.valid_keywords_for_retrieve_level[retrieve_level]:
+            if dicom_keyword not in irrelevant_keywords:
+                if dicom_keyword not in Orthanc.valid_keywords_for_retrieve_level[retrieve_level]:
+                    LOGGER.warning(f"Find query contains invalid keyword {dicom_keyword}"+\
+                                    f" for retrieve level {retrieve_level}")
                 find_query[dicom_keyword] = dicom_value
         return find_query
 
+    @staticmethod
+    def filterTagsOfDicomDict(dicom_dict, find_query, find_level):
+        """
+        Filter out json values that cause exceptions in orthanc when
+        json is converted to DICOM file.
+        """
+        LOGGER.debug(f"filterTagsOfDicomDict called with find_query {find_query}, find_level {find_level}")
+        #remove picture data ("7fe0,0010", "0002,0002"), otherwise orthanc starts screaming
+        #encoding shall be returned with every answer
+        required_tags = ["0008,0005"]
+        find_query_tags = [tag_for_keyword(keyword) for keyword in find_query.keys()]
+        find_query_tags = [f"{tag:08X}"[:4] + "," + f"{tag:08X}"[4:] for tag in find_query_tags]
+        LOGGER.debug(f"Filtering out tags from json structure not in {find_query_tags} or {required_tags}")
+        #return only tags that the user asked for in the c-find query
+        return_dict = {k:v for (k, v) in dicom_dict.items() if k in find_query_tags + required_tags}
+        LOGGER.debug(f"Adding QueryRetrieveLevel ({find_level}) to answer.")
+        return_dict["0008,0052"] = find_level.capitalize()
+        return return_dict
+    
+    @staticmethod
+    def getIDOfResource(resource: dict):
+        """
+        Return ID field of Orthanc resource
+        """
+        try:
+            resource_id = resource["ID"]
+        except KeyError:
+            LOGGER.error(f"Failed to read ID from resource: {resource}")
+            raise
+        return resource_id
+    
+    @staticmethod
+    def getResourceByID(resource_list, resource_id: str):
+        """
+        search for a resource identified by its ID in a list of Orthanc resources
+        """
+        for resource in resource_list:
+            if resource["ID"] == resource_id:
+                return resource
         
+
 def enhance_query(output, uri_path, **kwargs):
     LOGGER.debug(f"{uri_path} called with body: {kwargs['body']}")
     local_orthanc = Orthanc(f"http://localhost:{LOCAL_HTTP_PORT}",
@@ -291,52 +364,61 @@ def enhance_query(output, uri_path, **kwargs):
                              http_password=HTTP_PASSWORD)
     
     request_body_dict = local_orthanc.getDictFromRequestBody(kwargs["body"])
-    LOGGER.debug(f"request body decoded to: {request_body_dict}")
+    LOGGER.debug(f"Request body decoded to: {request_body_dict}")
 
-    find_level = local_orthanc.getQueryRetrieveLevel(request_body_dict)
-    find_query = local_orthanc.collateFindQuery(request_body_dict)
+    find_level = Orthanc.getQueryRetrieveLevel(request_body_dict)
+    find_query = Orthanc.collateFindQuery(request_body_dict)
 
+    #Search for resources via Orthanc API (remote), store all resources found in list
     try:
-        remote_instances = []
-        remote_orthanc_resources_found = remote_orthanc.findResources(find_query, level=find_level)
+        remote_resources = []
+        remote_orthanc_resources_found = remote_orthanc.findResources(find_query, find_level)
     except (requests.ConnectTimeout, requests.ConnectionError):
         LOGGER.error(f"Failed to connect to {remote_orthanc.url} to query for resources.")
     else:
         for resource in remote_orthanc_resources_found:
-            instance_list = remote_orthanc.getInstancesOfOrthancResource(resource)
-            LOGGER.debug(f"Instances found for remote resource: {instance_list}")
-            remote_instances.extend(instance_list)
+            resource_list = remote_orthanc.getSubresourcesOfOrthancResource(resource, find_level)
+            LOGGER.debug(f"Resources found for remote resource: {resource_list}")
+            remote_resources.extend(resource_list)
     
-    local_orthanc_resources_found = local_orthanc.findResources(find_query, level=find_level)
-    local_instances = []
+    #Search for resources via Orthanc API (local), store all resources found in list
+    local_orthanc_resources_found = local_orthanc.findResources(find_query, find_level)
+    local_resources = []
     for resource in local_orthanc_resources_found:
-        instance_list = local_orthanc.getInstancesOfOrthancResource(resource)
-        LOGGER.debug(f"Instances found for local resource: {instance_list}")
-        local_instances.extend(instance_list)
+        resource_list = local_orthanc.getSubresourcesOfOrthancResource(resource, find_level)
+        LOGGER.debug(f"Resources found for local resource: {resource_list}")
+        local_resources.extend(resource_list)
     
-    strictly_remote_instances = set(remote_instances) - set(local_instances)
-    strictly_local_instances = set(local_instances) - set(remote_instances)
-    intersecting_instances = set(local_instances) & set(remote_instances)
-    LOGGER.debug(f"Required instances not present on local orthanc are: {strictly_remote_instances}")
-    LOGGER.debug(f"Instances present on both local and remote ortanc are: {intersecting_instances}")
 
+    remote_ids = [Orthanc.getIDOfResource(resource) for resource in remote_resources]
+    local_ids = [Orthanc.getIDOfResource(resource) for resource in local_resources]
+    strictly_remote_ids = set(remote_ids) - set(local_ids)
+    strictly_local_ids = set(local_ids) - set(remote_ids)
+    intersecting_ids = set(local_ids) & set(remote_ids)
+    LOGGER.debug(f"Required resources not present on local orthanc are: {strictly_remote_ids}")
+    LOGGER.debug(f"Resources present on both local and remote ortanc are: {strictly_local_ids}")
+    LOGGER.debug(f"Resources present on both local and remote ortanc are: {intersecting_ids}")
+
+    #Collate dictionaries (numeric dicom tags / dicom values) for every resource found
     dicom_list = []
     try:
-        for instance in strictly_remote_instances:
-            dicom_list.append(remote_orthanc.getTagsAndValuesOfOrthancInstance(instance))
+        for resource_id in strictly_remote_ids:
+            resource = Orthanc.getResourceByID(remote_resources, resource_id)
+            dicom_dict = remote_orthanc.getTagsAndValuesOfOrthancResource(resource_id, find_level)
+            dicom_list.append(Orthanc.filterTagsOfDicomDict(dicom_dict, find_query, find_level))
     except (requests.ConnectTimeout, requests.ConnectionError):
         LOGGER.error(f"Failed to connect to {remote_orthanc.url} to get dicom data for instances.")
 
-    for instance in strictly_local_instances | intersecting_instances:
-        dicom_list.append(local_orthanc.getTagsAndValuesOfOrthancInstance(instance))
+    for resource_id in strictly_local_ids | intersecting_ids:
+        resource = Orthanc.getResourceByID(local_resources, resource_id)
+        dicom_dict = local_orthanc.getTagsAndValuesOfOrthancResource(resource_id, find_level)
+        dicom_list.append(Orthanc.filterTagsOfDicomDict(dicom_dict, find_query, find_level))
 
     dicom_list_as_json = json.dumps(dicom_list)
     LOGGER.debug(f"Returning list of dicom dicts to caller: {dicom_list_as_json}")
 
     if output is not None:
-        #output.AnswerBuffer('{"PatientID": "11788770006213"}', 'application/json')
         output.AnswerBuffer(dicom_list_as_json, 'application/json')
-
 
 
 def enhance_c_move():
@@ -348,6 +430,8 @@ def OnChange(changeType, level, resource):
         LOGGER.debug(f"Change Callback started, type: {changeType}, body: {body}")
         LOGGER.debug(f"Uploading instance {resource} to peer {PEER_NAME}")
         result = orthanc.RestApiPost("/peers/{}/store".format(PEER_NAME), body)
+        result_dict = json.loads(result.decode())
+        LOGGER.debug(f"Orthanc job with ID {result_dict['ID']} started.")
 
 if "orthanc" in sys.modules:
     orthanc.RegisterRestCallback('/enhancequery', enhance_query)
