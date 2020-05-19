@@ -53,15 +53,51 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
     json_body = json_body + json_tuple;
   }
   json_body = json_body + "}";
-  OrthancPluginLogWarning(context, json_body.c_str()); 
+  
+
 
   OrthancPluginErrorCode enhanceError = OrthancPluginRestApiPostAfterPlugins(context, 
                                                                              &temp2,
                                                                              "/enhancequery",
                                                                              json_body.c_str(),
                                                                              strlen(json_body.c_str()));
+
+
   if (enhanceError) {
     return enhanceError;
+  }
+
+ //char * sample_json_big = "[{\"00100021\":{\"vr\":\"LO\",\"Value\":[\"Hospital A\"]}}]";
+ //const char * sample_json_list = "[{\"00100021\":\"Hospital A\"}]";
+
+ std::string string_data = (char*) temp2.data;
+ Json::Value root;
+ Json::Reader reader;
+ Json::FastWriter writer;
+
+ bool parsedSuccess = reader.parse(string_data, root, false);
+ if(not parsedSuccess)
+ {
+   OrthancPluginLogWarning(context, "Failed to parse JSON");
+   return OrthancPluginErrorCode_BadJson;
+ }
+ 
+  OrthancPluginLogWarning(context, "##############################################");
+
+  for(unsigned int index=0; index<(uint) root.size(); ++index) {
+    OrthancPluginLogWarning(context, "Working over JSON structure.");
+    std::string tags_string = writer.write(root[index]);
+    OrthancPluginLogWarning(context, tags_string.c_str());
+    OrthancPluginMemoryBuffer dicom_buffer;
+    OrthancPluginErrorCode dicom_return_code = OrthancPluginCreateDicom(context, &dicom_buffer,
+                                                 tags_string.c_str(), NULL, OrthancPluginCreateDicomFlags_None);
+    if (dicom_return_code) {
+      OrthancPluginLogWarning(context, "Failed to convert json to DICOM");
+    } else
+    {
+      OrthancPluginFindAddAnswer(context, answers, dicom_buffer.data, dicom_buffer.size);
+      OrthancPluginFreeMemoryBuffer(context, &dicom_buffer); 
+    }
   }
   OrthancPluginFreeMemoryBuffer(context, &temp2);
   return OrthancPluginErrorCode_Success;
