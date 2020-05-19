@@ -6,6 +6,8 @@ import hashlib
 import logging
 import sys
 import copy
+# line added 10 4 content disposition
+import requests
 from json import loads, dumps
 from pydicom import dcmread
 from pydicom.dataset import Dataset
@@ -23,7 +25,7 @@ except ImportError:
     LOGGER.warning("Failed to import orthanc module.")
 
 class Worklist():
-    modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/tmp")
+    modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/var/lib/orthanc/WorklistsDatabase")
     modality_worklist_suffix = os.environ.get("ORTHANC_WORKLIST_SUFFIX", "wl")
     
     # set of rules that need to be respected
@@ -60,6 +62,19 @@ class Worklist():
         self.createDataSetFromJson()
         filehash = self.storeDataSetOnDisk()
         return {"id": filehash}
+    
+    @classmethod
+    def create_worklists_directory(cls):
+        """
+        Class method. Tries to create directory on given path as defined by class variable modality_worklist_path 
+        Do nothing if dir already exists
+        """
+        try:
+            os.makedirs(cls.modality_worklist_path, exist_ok=True)
+            LOGGER.info(f"Worklist directory {cls.modality_worklist_path} created.")
+        except FileExistsError:
+            pass
+            
 
     @staticmethod
     def flattenIterable(someiterable):
@@ -111,7 +126,7 @@ class Worklist():
     def create_available_worklists_response_dict(self):
         """
         Method creates a list of all the available worklists. 
-        :returns: serialize obj to a Json formatted string uding conversion table 
+        :returns: serialize obj to a Json formatted string using conversion table 
         """
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
@@ -127,7 +142,10 @@ class Worklist():
 
     def hashme(self, string_to_hash):
         LOGGER.debug(f"Worklist from file {string_to_hash} has been hashed")
-        hashed_code = hashlib.sha1(string_to_hash.encode("utf-8")).hexdigest()
+        if string_to_hash != "":
+            hashed_code = hashlib.sha1(string_to_hash.encode("utf-8")).hexdigest()
+        else:
+            raise ValueError(f"Value for key {string_to_hash} is invalid")
         return hashed_code
 
     def get_current_worklists(self):
@@ -296,11 +314,15 @@ def worklist_worker(output, uri_path, **kwargs):
     """
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
+        # request data from a specific resource
         myworklist = Worklist()
         worklists = myworklist.create_available_worklists_response_dict()
-        output.AnswerBuffer(str(worklists), 'application/json')
+        output.AnswerBuffer(str(worklists), 'application/json', {'Content-Disposition':'attachment'})
+        
     elif kwargs["method"] == "POST":
+        # sends data to the server --> stored in a request body
         myworklist = Worklist(json=kwargs["body"])
+
         response_dict = myworklist.create_worklist_from_json(myworklist.json)
         output.AnswerBuffer(str(response_dict), 'application/json')
     elif kwargs["method"] == "DELETE":
@@ -319,5 +341,7 @@ def worklist_worker(output, uri_path, **kwargs):
         output.AnswerBuffer("{}", 'application/json')
 
 
-orthanc.RegisterRestCallback('/worklists', worklist_worker)
-orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
+if "orthanc" in sys.modules.keys():
+    Worklist.create_worklists_directory()
+    orthanc.RegisterRestCallback('/worklists', worklist_worker)
+    orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)

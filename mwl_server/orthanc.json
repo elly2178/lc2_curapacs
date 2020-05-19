@@ -4,6 +4,12 @@
   "Plugins" : [
     "/usr/local/share/orthanc/plugins"
   ],
+  "_comment": "added lines 8 to 12 for basic config",
+  "Worklists" : {
+    "Enable": true,
+    "Database": "/var/lib/orthanc/WorklistsDatabase",
+    "FilterIssuerAet": false  
+  },
   "PythonScript" : "/etc/orthanc/app.py",
   "OrthancPeers" : { 
 	  "c0100-orthanc" : {
