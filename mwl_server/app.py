@@ -113,7 +113,7 @@ class Worklist():
                     keyword_dict[key][dicom_keyword] = keyword_dict[key].pop(dicom_tag)
                     if vr_dict["Value"] and isinstance(vr_dict["Value"][0], dict):
                         for index, nested_vr_dict in enumerate(vr_dict["Value"]):
-                            for nested_dicom_tag, nested_nested_vr_dict in nested_vr_dict.items():
+                            for nested_dicom_tag, _ in nested_vr_dict.items():
                                 try:
                                     nested_dicom_keyword = keyword_for_tag(int(nested_dicom_tag, 16))
                                 except ValueError:
@@ -122,7 +122,7 @@ class Worklist():
                                     keyword_dict[key][dicom_keyword]["Value"][index].pop(nested_dicom_tag)
         return keyword_dict
 
-    def create_available_worklists_response_dict(self, hashed_code=None):
+    def create_available_worklists_response_dict(self, replace_tags_with_keywords=True, hashed_code=None):
         """
         this method is used when someone does GET /worklists
         it returns a json with all worklists represented
@@ -130,14 +130,18 @@ class Worklist():
         Method creates a list of all the available worklists. 
         :returns: serialize obj to a Json formatted string using conversion table 
         """
-        if hashed_code is not None:
-            pass
+          
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
             hashed_filename = self.hashme(worklist_filename)
             ds = self.create_dataset_from_file(Worklist.modality_worklist_path + "/" + worklist_filename)
-            response_dict[hashed_filename] = ds.to_json_dict() 
+            response_dict[hashed_filename] = ds.to_json_dict()  
+        if replace_tags_with_keywords == True:             
             response_dict = self.replace_tags_with_keywords(response_dict)
+        if hashed_code is not None and hashed_code in response_dict.keys():
+            tmp = response_dict[hashed_code]
+            response_dict.clear()
+            response_dict[hashed_code] = tmp
         return dumps(response_dict)
 
     def create_dataset_from_file(self, filepath):
@@ -157,7 +161,7 @@ class Worklist():
         Gets the worklists that are locally stored. Puts them in a temporary list. Targets
         only the files with a specific suffix
 
-        :returns: the temporary list that contains """
+        :returns: a list of filenames (without their path) of the worklists currently available """
         modality_worklist_dir_files = os.scandir(Worklist.modality_worklist_path)
         worklist_list = []
         with modality_worklist_dir_files as existing_files:
@@ -253,10 +257,16 @@ class Worklist():
         return True
                       
     def storeDataSetOnDisk(self):
-        """writes Dataset (Worklist DICOM File) to disk, filename is a timestamp"""
-        currentDate = time.strftime('%G-%m-%d_%H-%M-%S', time.localtime())
-        filename = currentDate + "." + Worklist.modality_worklist_suffix
-        concatination_file_name = os.path.join(Worklist.modality_worklist_path, filename)
+        """writes Dataset (Worklist DICOM File) to disk, filename is a timestamp."""
+        index = 0
+        while True:
+            currentDate = time.strftime('%G-%m-%d_%H-%M-%S', time.localtime())
+            filename = currentDate + f"_{index}" + "." + Worklist.modality_worklist_suffix
+            concatination_file_name = os.path.join(Worklist.modality_worklist_path, filename)
+            if os.path.isfile(concatination_file_name) == False:
+                break
+            else:
+                index = index + 1
         self.pydicom_dataset.save_as(concatination_file_name)
         return self.hashme(filename)
 
@@ -319,23 +329,27 @@ def worklist_worker(output, uri_path, **kwargs):
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
         # request data from a specific resource  output.SetHttpHeader("Content-Disposition","attachment") 
-        #maybe doing a filedownload isn't our best option here, the dicom file representing the worklist
-        #can also be transfered as a simple json, that might save us some hassle
-        #lets check our worklists class
-        if len(kwargs['groups']) == 2 and kwargs['groups'][1] == "file":
-            print("donwloading file "+kwargs['groups'][0])
-            output.AnswerBuffer(f"ARE YOU READY FOR THAT {kwargs['groups'][0]} ", 'application/json')
+        # either /worklists or /worklists/908278385409823450
+        
+        myworklist = Worklist()
+        if len(kwargs['groups']) == 1:
+            worklist_id = kwargs['groups'][0]
+            if len(worklist_id) == 40:
+                worklists = myworklist.create_available_worklists_response_dict(replace_tags_with_keywords=False, 
+                                                                                hashed_code=worklist_id)
+            else:
+                message = f"Invalid worklist ID {worklist_id}"
+                output.SendHttpStatus(400, message, len(message))              
         else:
-            myworklist = Worklist()
             worklists = myworklist.create_available_worklists_response_dict()
-            output.AnswerBuffer(str(worklists), 'application/json')
+        output.AnswerBuffer(str(worklists), 'application/json')
         
     elif kwargs["method"] == "POST":
         # sends data to the server --> stored in a request body
         myworklist = Worklist(json=kwargs["body"])
-        
         response_dict = myworklist.create_worklist_from_json(myworklist.json)
         output.AnswerBuffer(str(response_dict), 'application/json')
+
     elif kwargs["method"] == "DELETE":
         try:
             hashed_id_of_worklist = kwargs['groups'][0]
@@ -352,22 +366,8 @@ def worklist_worker(output, uri_path, **kwargs):
         output.AnswerBuffer("{}", 'application/json')
 
 
-def deleteme_worker(output, uri_path, **kwargs):
-    #with this endpoint, we will try to return an http resource including the header, whose name just forgot one second
-    #not now, later mabye
-    output.SetHttpHeader("Content-Disposition","attachment") 
-    output.AnswerBuffer("{}", 'application/json')
-    
-    #if a request for /worklists/{someid}/file arrives, we deliver the dicom file
-    #output methods: 'AnswerBuffer', 'CompressAndAnswerJpegImage', 'CompressAndAnswerPngImage', 'Redirect',\
-    #  'SendHttpStatus', 'SendHttpStatusCode', 'SendMethodNotAllowed', 'SendMultipartItem', 'SendUnauthorized',\
-    #  'SetCookie', 'SetHttpErrorDetails', 'SetHttpHeader', 'StartMultipartAnswer'
 if "orthanc" in sys.modules.keys():
     Worklist.create_worklists_directory()
     orthanc.RegisterRestCallback('/worklists', worklist_worker)
-    orthanc.RegisterRestCallback('/worklists/(.*)/(.*)', worklist_worker)
-    #the easiest thing o we cando is ntoe expose a new endpoint 
-    #the regex (.*) will catch /worklists/download, so youll never reach this thing aha ok
-    #
-    orthanc.RegisterRestCallback('/deleteme', deleteme_worker)
-    
+    orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
+
