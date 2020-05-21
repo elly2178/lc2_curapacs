@@ -67,9 +67,6 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
     return enhanceError;
   }
 
- //char * sample_json_big = "[{\"00100021\":{\"vr\":\"LO\",\"Value\":[\"Hospital A\"]}}]";
- //const char * sample_json_list = "[{\"00100021\":\"Hospital A\"}]";
-
  std::string string_data = (char*) temp2.data;
  Json::Value root;
  Json::Reader reader;
@@ -103,14 +100,20 @@ ORTHANC_PLUGINS_API OrthancPluginErrorCode OnFindCallback (OrthancPluginFindAnsw
   return OrthancPluginErrorCode_Success;
 }
 
+
 extern "C"
 {    
   ORTHANC_PLUGINS_API int32_t OrthancPluginInitialize(OrthancPluginContext* context)     
   {    
-    Orthanc::Logging::Initialize(context);    
-    OrthancPlugins::SetGlobalContext(context);   
+    Orthanc::Logging::Initialize(context);
+    OrthancPlugins::SetGlobalContext(context);
     OrthancPluginSetDescription(context, "Orthanc Plugin Enhance Incoming C-Find queries");
     OrthancPluginRegisterFindCallback(context, (OrthancPluginFindCallback) OnFindCallback);
+    /*
+    OrthancPluginRegisterMoveCallback(context, (OrthancPluginMoveCallback) OnMoveCallback,
+                        (OrthancPluginGetMoveSize) moveSizeCallback, (OrthancPluginApplyMove) applyMoveCallback, 
+                        (OrthancPluginFreeMove) freeMoveCallback);
+    */
     return 0;   
   }    
   ORTHANC_PLUGINS_API void OrthancPluginFinalize()    
