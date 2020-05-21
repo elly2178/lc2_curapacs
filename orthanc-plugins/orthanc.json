@@ -4,13 +4,7 @@
   "Plugins" : [
     "/usr/local/share/orthanc/plugins"
   ],
-  "_comment": "added lines 8 to 12 for basic config",
-  "Worklists" : {
-    "Enable": true,
-    "Database": "/var/lib/orthanc/WorklistsDatabase",
-    "FilterIssuerAet": false  
-  },
-  "PythonScript" : "/usr/local/share/orthanc/app.py",
+  "PythonScript" : "/usr/local/share/orthanc/plugins/main.py",
   "OrthancPeers" : { 
 	  "c0100-orthanc" : {
 		  "Url": "http://c0100-orthanc.curapacs.ch:80",
