@@ -24,7 +24,7 @@ except ImportError:
     LOGGER.warning("Failed to import orthanc module.")
 
 class Worklist():
-    modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/var/lib/orthanc/WorklistsDatabase")
+    modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/var/lib/orthanc/worklists")
     modality_worklist_suffix = os.environ.get("ORTHANC_WORKLIST_SUFFIX", "wl")
     
     # set of rules that need to be respected
@@ -330,7 +330,7 @@ def worklist_worker(output, uri_path, **kwargs):
     if kwargs["method"] == "GET":
         # request data from a specific resource  output.SetHttpHeader("Content-Disposition","attachment") 
         # either /worklists or /worklists/908278385409823450
-        
+
         myworklist = Worklist()
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
