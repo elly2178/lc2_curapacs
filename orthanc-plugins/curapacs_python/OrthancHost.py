@@ -79,7 +79,7 @@ class OrthancHost:
         config.LOGGER.debug(f"local_instances are {instance_list}")
         return instance_list
 
-    def fetchOrthancInstance(self, instance_id: str, remote_orthanc_uri=config.ORTHANC_URI):
+    def fetchOrthancInstance(self, instance_id: str, remote_orthanc_uri: str):
         """
         Download DICOM Data of instance with instance_id to local orthanc.
 

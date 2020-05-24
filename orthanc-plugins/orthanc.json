@@ -1,6 +1,7 @@
 {
   "StorageDirectory" : "/var/lib/orthanc/db",
   "RemoteAccessAllowed" : true,
+  "HttpPort": 8042,
   "Plugins" : [
     "/usr/local/share/orthanc/plugins"
   ],
@@ -14,5 +15,14 @@
   },
   "DicomModalities" : {
 	"findscu" : [ "FINDSCU", "127.0.0.1", 1234 ]
+  },
+  "RegisteredUsers": {
+	  "orthanc": "orthanc"
+  },
+  "CURAPACS": {
+	  "PARENT_NAME": "c0100-orthanc",
+	  "PARENT_DOMAIN": "curapacs.ch",
+	  "PARENT_SCHEMA": "http",
+	  "HTTP_TIMEOUT":"5"
   }
 }

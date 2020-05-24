@@ -1,6 +1,7 @@
 import sys
 import json
 import requests
+import multiprocessing
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
 
@@ -12,11 +13,11 @@ except ImportError:
 def enhance_query(output, uri_path, **kwargs):
     config.LOGGER.debug(f"{uri_path} called with body: {kwargs['body']}")
     local_orthanc = OrthancHost(f"http://localhost:{config.LOCAL_HTTP_PORT}",
-                            http_user=config.HTTP_USER,
-                            http_password=config.HTTP_PASSWORD)
-    remote_orthanc = OrthancHost(config.ORTHANC_URI,
-                             http_user=config.HTTP_USER,
-                             http_password=config.HTTP_PASSWORD)
+                            http_user=config.LOCAL_HTTP_USER,
+                            http_password=config.LOCAL_HTTP_PASSWORD)
+    remote_orthanc = OrthancHost(config.PEER_URI,
+                             http_user=config.PEER_HTTP_USER,
+                             http_password=config.PEER_HTTP_PASSWORD)
 
     request_body_dict = local_orthanc.getDictFromRequestBody(kwargs["body"])
     config.LOGGER.debug(f"Request body decoded to: {request_body_dict}")
@@ -75,11 +76,20 @@ def enhance_query(output, uri_path, **kwargs):
     if output is not None:
         output.AnswerBuffer(dicom_list_as_json, 'application/json')
 
-
 def enhance_c_move():
     pass
 
-def forward_instance(changeType, level, resource):
+def orthanc_websocket():
+    import time
+    counter = 0
+    while True:
+        config.LOGGER.debug("COUNTER IS AT " + str(counter))
+        time.sleep(5)
+        counter += 1
+
+def on_change(changeType, level, resource):
+    orthanc_websocket_process = multiprocessing.Process(target=orthanc_websocket)
+    orthanc_websocket_process.daemon = True
     if changeType == orthanc.ChangeType.NEW_INSTANCE:
         body = json.dumps({"Resources": [resource], "Asynchronous": True})
         config.LOGGER.debug(f"Change Callback started, type: {changeType}, body: {body}")
@@ -87,10 +97,12 @@ def forward_instance(changeType, level, resource):
         result = orthanc.RestApiPost(f"/peers/{config.PEER_NAME}/store", body)
         result_dict = json.loads(result.decode())
         config.LOGGER.debug(f"Orthanc job with ID {result_dict['ID']} started.")
+    if changeType == orthanc.ChangeType.ORTHANC_STARTED:
+        orthanc_websocket_process.start()
+    if changeType == orthanc.ChangeType.ORTHANC_STOPPED:
+        orthanc_websocket_process.terminate()
+
 
 if "orthanc" in sys.modules:
     orthanc.RegisterRestCallback('/enhancequery', enhance_query)
-    orthanc.RegisterOnChangeCallback(forward_instance)
-else:
-    sample_body = b'{"0008,0052":"Patient", "0010,0010":"PATIENT C", "0010,0020":""}'
-    enhance_query(None, "/enhancequery", body=sample_body)
+    orthanc.RegisterOnChangeCallback(on_change)
