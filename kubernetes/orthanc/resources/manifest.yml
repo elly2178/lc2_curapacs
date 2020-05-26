@@ -13,6 +13,16 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: orthanc-ws
+spec:
+  ports:
+  - name: orthanc-ws
+    protocol: TCP
+    port: 8081
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: orthanc-dicom
 spec:
   ports:
@@ -33,6 +43,10 @@ spec:
           serviceName: orthanc-web
           servicePort: orthanc-web
         path: /
+      - backend:
+          serviceName: orthanc-ws
+          servicePort: orthanc-ws
+        path: /ws
 ---
 kind: ConfigMap
 apiVersion: v1
