@@ -44,10 +44,12 @@ data:
   PEERS: '{"orthanc-peer" : [ "http://c0100-peer.curapacs.ch" ]}'
   HTTP_PORT: "8080"
   PG_ENABLED: "true"
-  PG_HOST: "orthanc-postgres"
+  PG_HOST: "orthanc-postgres-CURAPACS_CUSTOMER"
   PG_DB: "orthanc"
   PG_USER: "orthanc"
   PG_PASSWORD: "orthanc"
+  PYTHON_PLUGIN_ENABLED: "true"
+  WORKLISTS_PLUGIN_ENABLED: "true"
 ---
 apiVersion: apps/v1
 kind: Deployment

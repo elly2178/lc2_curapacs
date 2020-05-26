@@ -1,5 +1,5 @@
 [
   {"op": "replace",
    "path": "/spec/rules/0/host",
-   "value": "CURAMED_CUSTOMER-meddream-tokenservice.CURAPACS_DOMAIN"}
+   "value": "CURAPACS_CUSTOMER-meddream-tokenservice.CURAPACS_DOMAIN"}
 ]
