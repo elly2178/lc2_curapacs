@@ -8,5 +8,11 @@ metadata:
     app.kubernetes.io/part-of: ingress-nginx
   namespace: ingress-nginx
 data:
-  4242: "curapacs/orthanc-dicom:4242"
-  4243: "curapacs-local/orthanc-dicom-local:4243"
+  4242: "curapacs/orthanc-dicom-c0100:4242"
+  4243: "curapacs/orthanc-dicom-c0101:4242"
+  4244: "curapacs/orthanc-dicom-c0102:4242"
+  4245: "curapacs/orthanc-dicom-c0103:4242"
+  4246: "curapacs/orthanc-dicom-c0104:4242"
+  4247: "curapacs/orthanc-dicom-c0105:4242"
+  4248: "curapacs/orthanc-dicom-c0106:4242"
+  4249: "curapacs/orthanc-dicom-c0107:4242"
