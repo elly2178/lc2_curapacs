@@ -7,3 +7,6 @@ RUN 	apt-get upgrade && \
 	apt-get remove -y python3-pip && \
 	apt autoremove -y
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD  ["/tmp/orthanc.json"]
+

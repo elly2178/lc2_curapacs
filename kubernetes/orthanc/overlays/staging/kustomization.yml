@@ -14,7 +14,7 @@ namespace: curapacs
 
 images:
 - name: dumig1/orthanc-python
-  newTag: "20-05-rc5"
+  newTag: "27-05-rc1"
 
 patches:
 - path: ingress_patch.json
