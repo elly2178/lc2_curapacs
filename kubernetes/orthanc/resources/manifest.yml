@@ -66,6 +66,7 @@ data:
   ORTHANC__REGISTERED_USERS: '{"orthanc": "orthanc"}'
   ORTHANC__DICOM_MODALITIES: '{"Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": ["FINDSCU", "10.42.0.1", 104]}'
   ORTHANC__ORTHANC_PEERS: '{"orthanc-peer": [ "http://c0100-peer.curapacs.ch" ]}'
+  ORTHANC__CURAPACS: '{"HTTP_TIMEOUT": "4"}'
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -103,7 +104,6 @@ spec:
             - name: tz-config
               mountPath: /etc/localtime
             - name: curapacs-python-plugins-vol
-              #mountPath: /tmp/curapacs
               mountPath: /usr/share/orthanc/curapacs
       volumes:
         - name: tz-config

@@ -4,22 +4,20 @@ from orthanc import GetConfiguration
 from json import loads
 
 orthanc_config = loads(GetConfiguration())
-curapacs_config_section = "CURAPACS"
+curapacs_config_section = "Curapacs"
 
-LOG_FORMAT = orthanc_config.get(curapacs_config_section).get("LOG_FORMAT") or \
-             "%(levelname)s %(asctime)s - %(message)s"
+try:
+    LOG_FORMAT = orthanc_config.get(curapacs_config_section).get("LOG_FORMAT") or \
+                 "%(levelname)s %(asctime)s - %(message)s"
+except AttributeError:
+    raise AttributeError(f"Config section {curapacs_config_section} is missing.")
 LOG_LEVEL = orthanc_config.get(curapacs_config_section).get("LOG_LEVEL") or "INFO"
 LOGGING_HANDLER = logging.StreamHandler(sys.stdout)
 logging.basicConfig(handlers=[LOGGING_HANDLER], level=logging._nameToLevel[LOG_LEVEL.upper()],
                     format=LOG_FORMAT)
 LOGGER = logging.getLogger()
 
-
-try:
-    PARENT_NAME = orthanc_config.get(curapacs_config_section).get("PARENT_NAME")
-except AttributeError:
-    LOGGER.error(f"Config section {curapacs_config_section} is missing.")
-    raise
+PARENT_NAME = orthanc_config.get(curapacs_config_section).get("PARENT_NAME", "")
 
 if PARENT_NAME:
     PEER_NAME = PARENT_NAME
