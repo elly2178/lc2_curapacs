@@ -14,7 +14,13 @@ logging.basicConfig(handlers=[LOGGING_HANDLER], level=logging._nameToLevel[LOG_L
                     format=LOG_FORMAT)
 LOGGER = logging.getLogger()
 
-PARENT_NAME = orthanc_config.get(curapacs_config_section).get("PARENT_NAME")
+
+try:
+    PARENT_NAME = orthanc_config.get(curapacs_config_section).get("PARENT_NAME")
+except AttributeError:
+    LOGGER.error(f"Config section {curapacs_config_section} is missing.")
+    raise
+
 if PARENT_NAME:
     PEER_NAME = PARENT_NAME
     PEER_URI = orthanc_config.get("OrthancPeers").get(PEER_NAME).get("Url")
