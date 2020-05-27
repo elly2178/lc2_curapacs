@@ -87,7 +87,7 @@ spec:
           image: alpine
           command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/orthanc-plugins && mv main.py curapacs-python/ /mnt/curapacs-python-plugins && chmod -R 775 /mnt/curapacs-python-plugins']
           volumeMounts:
-            - name: curapacs-plugins-vol
+            - name: curapacs-python-plugins-vol
               mountPath: /mnt/curapacs-python-plugins
       containers:
         - name: orthanc
@@ -104,5 +104,5 @@ spec:
         - name: tz-config
           hostPath:
             path: /usr/share/zoneinfo/Europe/Zurich
-        - name: curapacs-plugins-vol
+        - name: curapacs-python-plugins-vol
           emptyDir: {}
