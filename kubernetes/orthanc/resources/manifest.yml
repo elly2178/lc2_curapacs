@@ -61,7 +61,7 @@ data:
   ORTHANC__POSTGRESQL__USER: "orthanc"
   ORTHANC__POSTGRESQL__PASSWORD: "orthanc"
   PYTHON_PLUGIN_ENABLED: "true"
-  ORTHANC__PYTHON_SCRIPT: "/usr/local/share/orthanc/plugins/python/main.py"
+  ORTHANC__PYTHON_SCRIPT: "/usr/share/orthanc/plugins/python/main.py"
   WORKLISTS_PLUGIN_ENABLED: "true"
   ORTHANC__REGISTERED_USERS: '{"orthanc": "orthanc"}'
   ORTHANC__DICOM_MODALITIES: '{"Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": ["FINDSCU", "10.42.0.1", 104]}'
@@ -85,7 +85,7 @@ spec:
       initContainers:
         - name: init-fetch-python-scripts
           image: alpine
-          command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/orthanc-plugins && mv main.py curapacs-python/ /mnt/curapacs-python-plugins && chmod -R 775 /mnt/curapacs-python-plugins']
+          command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/orthanc-plugins && mv main.py curapacs_python/ /mnt/curapacs-python-plugins && chmod -R 775 /mnt/curapacs-python-plugins']
           volumeMounts:
             - name: curapacs-python-plugins-vol
               mountPath: /mnt/curapacs-python-plugins
@@ -98,8 +98,8 @@ spec:
           volumeMounts:
             - name: tz-config
               mountPath: /etc/localtime
-            - name: curapacs-plugins-vol
-              mountPath: /usr/local/share/orthanc/plugins/python/
+            - name: curapacs-python-plugins-vol
+              mountPath: /usr/share/orthanc/plugins/python/
       volumes:
         - name: tz-config
           hostPath:
