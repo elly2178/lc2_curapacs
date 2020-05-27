@@ -4,6 +4,7 @@ import requests
 import multiprocessing
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
+from curapacs_python.OrthancMWLCreator import Worklist
 
 try:
     import orthanc
@@ -87,9 +88,7 @@ def orthanc_websocket():
         time.sleep(5)
         counter += 1
 
-def on_change(changeType, level, resource):
-    orthanc_websocket_process = multiprocessing.Process(target=orthanc_websocket)
-    orthanc_websocket_process.daemon = True
+def on_change(changeType, level, resource):    
     if changeType == orthanc.ChangeType.NEW_INSTANCE:
         body = json.dumps({"Resources": [resource], "Asynchronous": True})
         config.LOGGER.debug(f"Change Callback started, type: {changeType}, body: {body}")
@@ -98,11 +97,62 @@ def on_change(changeType, level, resource):
         result_dict = json.loads(result.decode())
         config.LOGGER.debug(f"Orthanc job with ID {result_dict['ID']} started.")
     if changeType == orthanc.ChangeType.ORTHANC_STARTED:
-        orthanc_websocket_process.start()
+        pass
+        #ORTHANC_WEBSOCKET_PROCESS.daemon = True
+        #ORTHANC_WEBSOCKET_PROCESS.start()
     if changeType == orthanc.ChangeType.ORTHANC_STOPPED:
-        orthanc_websocket_process.terminate()
+        pass
+        #ORTHANC_WEBSOCKET_PROCESS.terminate()
+
+def worklist_worker(output, uri_path, **kwargs):
+    """
+    Uses methods GET, POST as a response to the server/ user.
+    With Delete, allows a worklist to be deleted
+    :param output: 
+    :param **kwargs: key word arguments 
+    """
+    print("KWARGS : " + str(kwargs))
+    if kwargs["method"] == "GET":
+        myworklist = Worklist()
+        if len(kwargs['groups']) == 1:
+            worklist_id = kwargs['groups'][0]
+            if len(worklist_id) == 40:
+                worklists = myworklist.create_available_worklists_response_dict(replace_tags_with_keywords=False, 
+                                                                                hashed_code=worklist_id)
+            else:
+                message = f"Invalid worklist ID {worklist_id}"
+                output.SendHttpStatus(400, message, len(message))
+        else:
+            worklists = myworklist.create_available_worklists_response_dict()
+        output.AnswerBuffer(str(worklists), 'application/json')
+        
+    elif kwargs["method"] == "POST":
+        myworklist = Worklist(json=kwargs["body"])
+        response_dict = myworklist.create_worklist_from_json(myworklist.json)
+        output.AnswerBuffer(str(response_dict), 'application/json')
+
+    elif kwargs["method"] == "DELETE":
+        try:
+            hashed_id_of_worklist = kwargs['groups'][0]
+            print(hashed_id_of_worklist)
+        except IndexError:
+            config.LOGGER.error("Hashed value for worklist to delete not given")
+            raise
+        myworklist = Worklist()
+        try:
+            myworklist.http_delete(hashed_id_of_worklist)
+        except FileNotFoundError as error:
+            output.SendHttpStatus(400, f"{error}", len(str(error)))
+            return
+        output.AnswerBuffer("{}", 'application/json')
 
 
 if "orthanc" in sys.modules:
-    orthanc.RegisterRestCallback('/enhancequery', enhance_query)
-    orthanc.RegisterOnChangeCallback(on_change)
+    Worklist.create_worklists_directory()
+    if config.PARENT_NAME:
+        orthanc.RegisterRestCallback('/enhancequery', enhance_query)
+        orthanc.RegisterOnChangeCallback(on_change)
+    else:
+        #ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=orthanc_websocket)
+        orthanc.RegisterRestCallback('/worklists', worklist_worker)
+        orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
