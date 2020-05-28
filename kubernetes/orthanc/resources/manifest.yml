@@ -94,9 +94,7 @@ spec:
         - name: orthanc
           image: dumig1/orthanc-python
           #command: ["/bin/bash"]
-          #args: ["-c", "/docker-entrypoint.sh"]
-          command: ["/bin/bash"]
-          args: ["-c", "sleep 500"]
+          #args: ["-c", "sleep 500"]
           envFrom:
             - configMapRef:
                 name: orthanc-config-cm
