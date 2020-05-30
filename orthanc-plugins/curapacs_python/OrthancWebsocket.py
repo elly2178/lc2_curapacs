@@ -48,6 +48,7 @@ websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #con
 unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path="/tmp/curapacs_socket")
 event_loop = asyncio.get_event_loop()
 event_loop.run_until_complete(websocket_server)
+event_loop.run_until_complete(unix_server)
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever)
 ORTHANC_WEBSOCKET_PROCESS.daemon = True
 ORTHANC_WEBSOCKET_PROCESS.start()
