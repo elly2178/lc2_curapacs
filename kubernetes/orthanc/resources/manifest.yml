@@ -56,7 +56,7 @@ data:
   ORTHANC__NAME: "CURAPACS"
   HTTP_PORT: "8080"
   POSTGRESQL_PLUGIN_ENABLED: "true"
-  ORTHANC__POSTGRESQL__HOST: "orthanc-postgres-CURAPACS_CUSTOMER" 
+  ORTHANC__POSTGRESQL__HOST: "orthanc-postgres-CURAPACS_CUSTOMER"
   ORTHANC__POSTGRESQL__DATABASE: "orthanc"
   ORTHANC__POSTGRESQL__USERNAME: "orthanc"
   ORTHANC__POSTGRESQL__PASSWORD: "orthanc"
@@ -64,8 +64,8 @@ data:
   ORTHANC__PYTHON_SCRIPT: "/usr/share/orthanc/curapacs/main.py"
   WORKLISTS_PLUGIN_ENABLED: "true"
   ORTHANC__REGISTERED_USERS: '{"orthanc": "orthanc"}'
-  ORTHANC__DICOM_MODALITIES: '{"Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": ["FINDSCU", "10.42.0.1", 104]}'
-  ORTHANC__ORTHANC_PEERS: '{"orthanc-peer": [ "http://c0100-peer.curapacs.ch" ]}'
+  ORTHANC__DICOM_MODALITIES: '{"FINDSCU-UTILITY": ["FINDSCU", "10.42.0.1", 104]}'
+  ORTHANC__ORTHANC_PEERS: '{"orthanc-peer": [ "http://CURAPACS_CUSTOMER-peer.curapacs.ch" ]}'
   ORTHANC__CURAPACS: '{"HTTP_TIMEOUT": "4"}'
 ---
 apiVersion: apps/v1

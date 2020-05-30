@@ -1,13 +1,11 @@
 import sys
-print("-"*60)
-print(sys.path)
-print("-"*60)
 import json
 import requests
 import multiprocessing
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
 from curapacs_python.OrthancMWLCreator import Worklist
+from curapacs_python.OrthancWebsocket import OrthancMessaging
 
 try:
     import orthanc
@@ -83,14 +81,6 @@ def enhance_query(output, uri_path, **kwargs):
 def enhance_c_move():
     pass
 
-def orthanc_websocket():
-    import time
-    counter = 0
-    while True:
-        config.LOGGER.debug("COUNTER IS AT " + str(counter))
-        time.sleep(5)
-        counter += 1
-
 def on_change(changeType, level, resource):    
     if changeType == orthanc.ChangeType.NEW_INSTANCE:
         body = json.dumps({"Resources": [resource], "Asynchronous": True})
@@ -117,6 +107,7 @@ def worklist_worker(output, uri_path, **kwargs):
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
         myworklist = Worklist()
+        OrthancMessaging.queue.put("GOT A WORKLIST GET FOR PATH "+uri_path)
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
             if len(worklist_id) == 40:
@@ -156,6 +147,5 @@ if "orthanc" in sys.modules:
         orthanc.RegisterRestCallback('/enhancequery', enhance_query)
         orthanc.RegisterOnChangeCallback(on_change)
     else:
-        #ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=orthanc_websocket)
         orthanc.RegisterRestCallback('/worklists', worklist_worker)
         orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
