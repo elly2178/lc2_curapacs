@@ -24,10 +24,9 @@ async def consumer_handler(websocket, path):
         print("MESSAGE RECEIVED: " + message)
 
 async def OrthancUnixSocketHandler(reader, writer):
-    while True:
-        data = await reader.read()
-        print("OrthancUnixSocketHandler got message" + data.decode())
-        await OrthancMessaging.queue.put(data.decode())
+    data = await reader.read()
+    print("OrthancUnixSocketHandler got message" + data.decode())
+    await OrthancMessaging.queue.put(data.decode())
 
 async def OrthancMessageHandler(websocket, path):
     OrthancMessaging.connected_instances.add(websocket)
