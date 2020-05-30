@@ -107,7 +107,7 @@ def worklist_worker(output, uri_path, **kwargs):
         myworklist = Worklist()
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect("/tmp/curapacs_socket")
-        sock.sendall("GOT A WORKLIST GET FOR PATH " + uri_path)
+        sock.sendall(bytes("GOT A WORKLIST GET FOR PATH " + uri_path))
         sock.close()
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
