@@ -43,3 +43,4 @@ start_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #config.
 event_loop = asyncio.get_event_loop()
 event_loop.run_until_complete(start_server)
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever)
+ORTHANC_WEBSOCKET_PROCESS.run()
