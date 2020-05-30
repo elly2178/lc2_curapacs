@@ -1,6 +1,7 @@
 import sys
 import json
 import requests
+import socket
 import multiprocessing
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
@@ -91,11 +92,8 @@ def on_change(changeType, level, resource):
         config.LOGGER.debug(f"Orthanc job with ID {result_dict['ID']} started.")
     if changeType == orthanc.ChangeType.ORTHANC_STARTED:
         pass
-        #ORTHANC_WEBSOCKET_PROCESS.daemon = True
-        #ORTHANC_WEBSOCKET_PROCESS.start()
     if changeType == orthanc.ChangeType.ORTHANC_STOPPED:
         pass
-        #ORTHANC_WEBSOCKET_PROCESS.terminate()
 
 def worklist_worker(output, uri_path, **kwargs):
     """
@@ -107,7 +105,10 @@ def worklist_worker(output, uri_path, **kwargs):
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
         myworklist = Worklist()
-        OrthancMessaging.queue.put_nowait("GOT A WORKLIST GET FOR PATH "+uri_path)
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect("/tmp/curapacs_socket")
+        sock.sendall("GOT A WORKLIST GET FOR PATH " + uri_path)
+        sock.close()
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
             if len(worklist_id) == 40:

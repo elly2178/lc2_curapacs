@@ -23,6 +23,11 @@ async def consumer_handler(websocket, path):
     async for message in websocket:
         print("MESSAGE RECEIVED: " + message)
 
+async def OrthancUnixSocketHandler(reader, writer):
+    while True:
+        data = await reader.read()
+        print("OrthancUnixSocketHandler got message" + data.decode())
+        await OrthancMessaging.queue.put(data.decode())
 
 async def OrthancMessageHandler(websocket, path):
     OrthancMessaging.connected_instances.add(websocket)
@@ -39,9 +44,10 @@ async def OrthancMessageHandler(websocket, path):
         task.cancel()
 
 
-start_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #config.LOCAL_WS_PORT)
+websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #config.LOCAL_WS_PORT)
+unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path="/tmp/curapacs_socket")
 event_loop = asyncio.get_event_loop()
-event_loop.run_until_complete(start_server)
+event_loop.run_until_complete(websocket_server)
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever)
 ORTHANC_WEBSOCKET_PROCESS.daemon = True
 ORTHANC_WEBSOCKET_PROCESS.start()
