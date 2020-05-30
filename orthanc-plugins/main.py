@@ -107,7 +107,7 @@ def worklist_worker(output, uri_path, **kwargs):
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
         myworklist = Worklist()
-        OrthancMessaging.queue.put("GOT A WORKLIST GET FOR PATH "+uri_path)
+        OrthancMessaging.queue.put_nowait("GOT A WORKLIST GET FOR PATH "+uri_path)
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
             if len(worklist_id) == 40:
