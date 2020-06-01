@@ -43,8 +43,8 @@ async def OrthancMessageHandler(websocket, path):
         [consumer_task, producer_task],
         return_when=asyncio.FIRST_COMPLETED,
     )
-    #for task in pending:
-    #    task.cancel()
+    for task in pending:
+        task.cancel()
 
 
 websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #config.LOCAL_WS_PORT)
