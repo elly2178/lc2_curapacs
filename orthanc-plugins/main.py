@@ -2,7 +2,6 @@ import sys
 import json
 import requests
 import socket
-import multiprocessing
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
 from curapacs_python.OrthancMWLCreator import Worklist

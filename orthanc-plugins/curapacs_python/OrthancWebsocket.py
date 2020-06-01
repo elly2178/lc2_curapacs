@@ -3,10 +3,7 @@ import websockets
 import json
 import logging
 import multiprocessing
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-logger.addHandler(logging.StreamHandler())
-#from config import config
+from curapacs_python import config
 
 class OrthancMessaging:
     """
@@ -14,6 +11,7 @@ class OrthancMessaging:
     """
     connected_instances = set()
     queue = asyncio.Queue()
+
 
 async def producer_handler(websocket, path):
     while True:
@@ -28,11 +26,23 @@ async def producer_handler(websocket, path):
 async def consumer_handler(websocket, path):
     async for message in websocket:
         print("MESSAGE RECEIVED: " + message)
+    print("consumer_handler returns")
 
 async def OrthancUnixSocketHandler(reader, writer):
     data = await reader.read()
-    print("OrthancUnixSocketHandler got message" + data.decode())
+    try:
+        data = data.decode()
+    except UnicodeDecodeError:
+        config.LOGGER.error(f"Failed to decode bytestring from unix socket")
+        return
+    config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data.decode}")
     await OrthancMessaging.queue.put(data.decode())
+
+async def OrthancMessageHandlerClient(uri):
+    while True:
+        async with websockets.connect(config.PEER_URI) as websocket_client:
+            config.LOGGER.debug(f"Websocket connection established with {config.PEER_URI}")
+            pass
 
 async def OrthancMessageHandler(websocket, path):
     OrthancMessaging.connected_instances.add(websocket)
@@ -42,16 +52,20 @@ async def OrthancMessageHandler(websocket, path):
         producer_handler(websocket, path))
     done, pending = await asyncio.wait(
         [consumer_task, producer_task],
-        return_when=asyncio.FIRST_COMPLETED,
+        timeout=config.HTTP_TIMEOUT,
+        return_when=asyncio.ALL_COMPLETED,
     )
-    for task in pending:
-        task.cancel()
+    #for task in pending:
+    #    task.cancel()
 
 
-websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", 8081) #config.LOCAL_WS_PORT)
-unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path="/tmp/curapacs_socket")
 event_loop = asyncio.get_event_loop()
-event_loop.run_until_complete(websocket_server)
+if config.PARENT_NAME:
+    websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", config.LOCAL_WS_PORT) #config.LOCAL_WS_PORT)
+    event_loop.run_until_complete(websocket_server)
+else:
+    event_loop.run_until_complete(OrthancMessageHandlerClient(config.PEER_URI))
+unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path=config.LOCAL_UNIX_SOCKET_PATH)
 event_loop.run_until_complete(unix_server)
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever)
 ORTHANC_WEBSOCKET_PROCESS.daemon = True
