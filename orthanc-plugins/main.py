@@ -105,7 +105,7 @@ def worklist_worker(output, uri_path, **kwargs):
     if kwargs["method"] == "GET":
         myworklist = Worklist()
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect("/tmp/curapacs_socket")
+        sock.connect(config.LOCAL_UNIX_SOCKET_PATH)
         sock.sendall(f"GOT A WORKLIST GET FOR PATH {uri_path}".encode("utf-8"))
         sock.close()
         if len(kwargs['groups']) == 1:
