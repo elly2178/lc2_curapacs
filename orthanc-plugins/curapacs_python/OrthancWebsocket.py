@@ -21,7 +21,7 @@ async def producer_handler(websocket, path):
     if OrthancMessaging.connected_instances:
         await asyncio.wait([orthanc_websocket.send(message) for
                             orthanc_websocket in OrthancMessaging.connected_instances])
-    await OrthancMessaging.queue.task_done()
+    OrthancMessaging.queue.task_done()
     print(f"Sent Message, queue contents are {OrthancMessaging.queue}")
 
 async def consumer_handler(websocket, path):
