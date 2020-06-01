@@ -35,16 +35,15 @@ async def OrthancUnixSocketHandler(reader, writer):
     except UnicodeDecodeError:
         config.LOGGER.error(f"Failed to decode bytestring from unix socket")
         return
-    config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data.decode}")
+    config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data.decode()}")
     await OrthancMessaging.queue.put(data.decode())
 
 async def OrthancMessageHandlerClient(uri):
     auth_header = list(helpers.get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD).items())[0]
     async with websockets.connect(uri, extra_headers=[auth_header]) as websocket_client:
-        while True:
-            config.LOGGER.debug(f"Websocket connection established with {uri}")
-            greeting = await websocket_client.recv()
-            print("WEBSOCKET GOT: " + greeting)
+        async for message in websocket_client:
+            print("GOT MESSAGE: " + message)
+    print("ENDING OrthancMessageHandlerClient")
 
 async def OrthancMessageHandler(websocket, path):
     OrthancMessaging.connected_instances.add(websocket)
@@ -64,7 +63,7 @@ async def OrthancMessageHandler(websocket, path):
 event_loop = asyncio.get_event_loop()
 if not config.PARENT_NAME:
     config.LOGGER.info("Starting websocket server.")
-    websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", config.LOCAL_WS_PORT) 
+    websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", config.LOCAL_WS_PORT)
     event_loop.run_until_complete(websocket_server)
 else:
     config.LOGGER.info("Starting websocket client.")
