@@ -3,9 +3,9 @@ import asyncio
 import websockets
 
 async def hello():
-    uri = "ws://localhost:8081"
+    uri = "ws://c0100-orthanc.curapacs.ch/ws"
 
-    async with websockets.connect(uri) as websocket:
+    async with websockets.connect(uri, extra_headers=[("Authorization", "Basic b3J0aGFuYzpvcnRoYW5j")]) as websocket:
         while True:
             name = input("What's your name? ")
             await websocket.send(name)

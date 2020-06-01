@@ -25,8 +25,10 @@ if PARENT_NAME:
     PEER_HTTP_USER = orthanc_config.get("OrthancPeers", {}).get(PEER_NAME, {}).get("Username") or "orthanc"
     PEER_HTTP_PASSWORD = orthanc_config.get("OrthancPeers", {}).get(PEER_NAME, {}).get("Password") or "orthanc"
 
-HTTP_TIMEOUT = int(orthanc_config.get(curapacs_config_section, {}).get("HTTP_TIMEOUT")) or 5
-LOCAL_HTTP_PORT = int(orthanc_config.get("HttpPort")) or 8080
+HTTP_TIMEOUT = orthanc_config.get(curapacs_config_section, {}).get("HTTP_TIMEOUT") or 5
+HTTP_TIMEOUT = int(HTTP_TIMEOUT)
+LOCAL_HTTP_PORT = orthanc_config.get("HttpPort") or 8080
+LOCAL_HTTP_PORT = int(LOCAL_HTTP_PORT)
 LOCAL_WS_PORT = orthanc_config.get(curapacs_config_section, {}).get("WEBSOCKET_PORT", "") or 8081
 LOCAL_UNIX_SOCKET_PATH = orthanc_config.get(curapacs_config_section, {}).get("UNIX_SOCKET_PATH", "") or "/tmp/curapacs.sock"
 LOCAL_HTTP_USER = list(orthanc_config.get("RegisteredUsers").keys())[0] or "orthanc"

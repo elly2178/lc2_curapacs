@@ -146,6 +146,7 @@ if "orthanc" in sys.modules:
     if config.PARENT_NAME:
         orthanc.RegisterRestCallback('/enhancequery', enhance_query)
         orthanc.RegisterOnChangeCallback(on_change)
+        print("FOUND A PARENTS")
     else:
         orthanc.RegisterRestCallback('/worklists', worklist_worker)
         orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)

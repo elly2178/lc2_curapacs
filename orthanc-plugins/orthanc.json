@@ -1,11 +1,11 @@
 {
   "StorageDirectory" : "/var/lib/orthanc/db",
   "RemoteAccessAllowed" : true,
-  "HttpPort": 8042,
+  "HttpPort": 8080,
   "Plugins" : [
-    "/usr/local/share/orthanc/plugins"
+    "/usr/share/orthanc/plugins"
   ],
-  "PythonScript" : "/usr/local/share/orthanc/plugins/main.py",
+  "PythonScript" : "/usr/share/orthanc/curapacs/main.py",
   "OrthancPeers" : { 
 	  "c0100-orthanc" : {
 		  "Url": "http://c0100-orthanc.curapacs.ch:80",
@@ -24,7 +24,7 @@
   "RegisteredUsers": {
 	  "orthanc": "orthanc"
   },
-  "CURAPACS": {
+  "Curapacs": {
 	  "PARENT_NAME": "c0100-orthanc",
 	  "HTTP_TIMEOUT":"5"
   }
