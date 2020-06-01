@@ -60,7 +60,7 @@ async def OrthancMessageHandler(websocket, path):
 
 
 event_loop = asyncio.get_event_loop()
-if config.PARENT_NAME:
+if not config.PARENT_NAME:
     websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", config.LOCAL_WS_PORT) #config.LOCAL_WS_PORT)
     event_loop.run_until_complete(websocket_server)
 else:
