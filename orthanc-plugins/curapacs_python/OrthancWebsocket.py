@@ -35,8 +35,8 @@ async def OrthancUnixSocketHandler(reader, writer):
     except UnicodeDecodeError:
         config.LOGGER.error(f"Failed to decode bytestring from unix socket")
         return
-    config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data.decode()}")
-    await OrthancMessaging.queue.put(data.decode())
+    config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data}")
+    await OrthancMessaging.queue.put(data)
 
 async def OrthancMessageHandlerClient(uri):
     auth_header = list(helpers.get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD).items())[0]
