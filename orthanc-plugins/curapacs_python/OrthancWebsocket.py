@@ -50,7 +50,7 @@ async def OrthancMessageHandlerClient(uri):
                                         ping_interval=config.LOCAL_WS_KEEPALIVE_INTERVAL) as websocket_client:
                 async for message in websocket_client:
                     print("GOT MESSAGE: " + message)
-        except websockets.exceptions.ConnectionClosedError:
+        except (websockets.exceptions.ConnectionClosedError, websockets.exceptions.InvalidStatusCode):
             config.LOGGER.info(f"Websocket connection terminated, retrying...")
             asyncio.sleep(5)
     config.LOGGER.debug("Terminating OrthancMessageHandlerClient")

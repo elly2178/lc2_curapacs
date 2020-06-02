@@ -2,6 +2,7 @@ import sys
 import json
 import requests
 import socket
+from curapacs_python import helpers
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
 from curapacs_python.OrthancMWLCreator import Worklist
@@ -101,13 +102,9 @@ def worklist_worker(output, uri_path, **kwargs):
     :param output: 
     :param **kwargs: key word arguments 
     """
-    print("KWARGS : " + str(kwargs))
+    config.LOGGER.debug(f"worklist_worker called with kwargs: {kwargs}")
     if kwargs["method"] == "GET":
         myworklist = Worklist()
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(config.LOCAL_UNIX_SOCKET_PATH)
-        sock.sendall(f"GOT A WORKLIST GET FOR PATH {uri_path}".encode("utf-8"))
-        sock.close()
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
             if len(worklist_id) == 40:
@@ -123,6 +120,7 @@ def worklist_worker(output, uri_path, **kwargs):
     elif kwargs["method"] == "POST":
         myworklist = Worklist(json=kwargs["body"])
         response_dict = myworklist.create_worklist_from_json(myworklist.json)
+        helpers.send_over_unix_socket({"type": "new_worklist", "id": response_dict["id"]})
         output.AnswerBuffer(str(response_dict), 'application/json')
 
     elif kwargs["method"] == "DELETE":

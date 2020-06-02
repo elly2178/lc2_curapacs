@@ -1,6 +1,7 @@
 import json
 import base64
 import requests
+import socket
 from curapacs_python import config
 
 def post_data(url, data, headers=None, timeout=config.HTTP_TIMEOUT, is_json=True):
@@ -53,3 +54,15 @@ def get_http_auth_header(username, password):
     """
     b64string = base64.b64encode(bytes("{}:{}".format(username, password), encoding="utf-8"))
     return {"Authorization": "Basic {}".format(b64string.decode())}
+
+def send_over_unix_socket(message):
+    if isinstance(message, dict()):
+        data = json.dumps(message)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(config.LOCAL_UNIX_SOCKET_PATH)
+        sock.sendall(data.encode("utf-8"))
+        config.LOGGER.debug(f"Sent message over unix socket: {message}")
+        sock.close()
+    except (OSError, TypeError):
+        config.LOGGER.error(f"Failed to open socket connection with {config.LOCAL_UNIX_SOCKET_PATH}")
