@@ -33,7 +33,7 @@ async def OrthancUnixSocketHandler(reader, writer):
     #async for message in reader:
     data = await reader.read()
     try:
-        data = message.decode()
+        data = data.decode()
     except UnicodeDecodeError:
         config.LOGGER.error(f"Failed to decode bytestring from unix socket")
         return
