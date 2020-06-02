@@ -60,7 +60,7 @@ async def OrthancMessageHandler(websocket, path):
             producer_handler(websocket, path))
         done, pending = await asyncio.wait(
             [consumer_task, producer_task],
-            timeout=config.HTTP_TIMEOUT,
+            timeout=20,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
