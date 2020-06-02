@@ -35,11 +35,11 @@ class Worklist():
     def create_worklist_from_json(self, json: dict):
         """
         A worklist is created using a json structure. This file contains the data
-        of the Patient, de modality,accession number and can be modified as much as desired.
+        of the Patient, the modality, accession number and can be modified as much as desired.
         First, the method checks if all the tags are present and if the rules of
         the tags are correct. Finally, the dataset gets written to disk.
 
-        :param json: referes to the json file that will be created. Type: dictonary
+        :param json: json dict containing info on worklist contents
         :returns: sha1 hash of filename created
         """
         for key, value in Worklist.flattenIterable(json):
@@ -48,7 +48,20 @@ class Worklist():
                     self.check_value(key, value, rule[key], **rule["constraints"])
                     break
         self.check_required_tags()
-        self.createDataSetFromJson()
+        pydicom_json = self.reformatJSON(json)
+        self.createDataSetFromJson(pydicom_json)
+        filehash = self.storeDataSetOnDisk()
+        return {"id": filehash}
+
+    def create_worklist_from_dicom_json(self, json: dict):
+        """
+        Expects the dicom json format, e.g. {"AccessionNumber": {"vr": "SH", "Value": ["4389400244813963"]}, ...}
+        and creates a worklist on disk
+
+        :param json: dicom json dict containing info on worklist contents
+        :returns: sha1 hash of filename created
+        """
+        self.createDataSetFromJson(json)
         filehash = self.storeDataSetOnDisk()
         return {"id": filehash}
     
@@ -198,9 +211,9 @@ class Worklist():
                    raise ValueError("Value for key {} does not match pattern {}".format(key, match_pattern))
         return True
      
-    def createDataSetFromJson(self):
+    def createDataSetFromJson(self, pydicom_json):
         """creates self.pydicom_dataset from self.json"""
-        self.pydicom_dataset = Dataset.from_json(self.reformatJSON(self.json))
+        self.pydicom_dataset = Dataset.from_json(pydicom_json)
         meta_dataset = Dataset()
         meta_dataset.MediaStorageSOPClassUID = "1.2.276.0.7230010.3.1.0.1"
         meta_dataset.ImplementationClassUID = "1.2.276.0.7230010.3.0.3.6.4"

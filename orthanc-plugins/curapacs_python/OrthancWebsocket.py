@@ -36,6 +36,7 @@ class OrthancMessage:
                              http_user=config.PEER_HTTP_USER,
                              http_password=config.PEER_HTTP_PASSWORD)
         worklist_as_json, _ = helpers.get_data(f"{remote_orthanc.url}/worklists/{worklist_id}")
+        print("Worklist is: " + json.dumps(worklist_as_json))
         worklist = Worklist(json=json.dumps(worklist_as_json))
         worklist.create_worklist_from_json(worklist.json)
         config.LOGGER.debug(f"Created new worklist.")
