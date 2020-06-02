@@ -29,6 +29,7 @@ async def consumer_handler(websocket, path):
     print("consumer_handler returns")
 
 async def OrthancUnixSocketHandler(reader, writer):
+    config.LOGGER.debug(f"OrthancUnixSocketHandler started.")
     data = await reader.read()
     try:
         data = data.decode()
@@ -39,6 +40,7 @@ async def OrthancUnixSocketHandler(reader, writer):
     await OrthancMessaging.queue.put(data)
 
 async def OrthancMessageHandlerClient(uri):
+    print("STARTING OrthancMessageHandlerClient")
     auth_header = list(helpers.get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD).items())[0]
     async with websockets.connect(uri, extra_headers=[auth_header]) as websocket_client:
         async for message in websocket_client:
@@ -67,9 +69,10 @@ if not config.PARENT_NAME:
     event_loop.run_until_complete(websocket_server)
 else:
     config.LOGGER.info("Starting websocket client.")
-    event_loop.run_until_complete(OrthancMessageHandlerClient("ws://c0100-orthanc.curapacs.ch/ws"))
+    event_loop.create_task(OrthancMessageHandlerClient("ws://c0100-orthanc.curapacs.ch/ws"))
 unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path=config.LOCAL_UNIX_SOCKET_PATH)
 event_loop.run_until_complete(unix_server)
+print("TODO STARTING SECONDARY PROCESS")
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever)
 ORTHANC_WEBSOCKET_PROCESS.daemon = True
 ORTHANC_WEBSOCKET_PROCESS.start()
