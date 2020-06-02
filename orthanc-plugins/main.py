@@ -6,7 +6,7 @@ from curapacs_python import helpers
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
 from curapacs_python.OrthancMWLCreator import Worklist
-from curapacs_python.OrthancWebsocket import OrthancMessaging
+from curapacs_python.OrthancWebsocket import OrthancMessage
 
 try:
     import orthanc
