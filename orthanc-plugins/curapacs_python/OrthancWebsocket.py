@@ -16,7 +16,7 @@ class OrthancMessaging:
 async def producer_handler(websocket, path):
     while True:
         message = await OrthancMessaging.queue.get()
-        print(f"Sending Message to all connected instances: {message}")
+        config.LOGGER.debug(f"Sending Message to all connected instances: {message}")
         if OrthancMessaging.connected_instances:
             await asyncio.wait([orthanc_websocket.send(message) for
                                 orthanc_websocket in OrthancMessaging.connected_instances])
@@ -31,9 +31,9 @@ async def consumer_handler(websocket, path):
 async def OrthancUnixSocketHandler(reader, writer):
     config.LOGGER.debug(f"OrthancUnixSocketHandler started.")
     async for message in reader:
-        data = await reader.read()
+        #data = await reader.read()
         try:
-            data = data.decode()
+            data = message.decode()
         except UnicodeDecodeError:
             config.LOGGER.error(f"Failed to decode bytestring from unix socket")
             return
@@ -48,10 +48,11 @@ async def OrthancMessageHandlerClient(uri):
         async with websockets.connect(uri, extra_headers=[auth_header]) as websocket_client:
             async for message in websocket_client:
                 print("GOT MESSAGE: " + message)
-    print("ENDING OrthancMessageHandlerClient")
+    config.LOGGER.debug("Terminating OrthancMessageHandlerClient")
 
 async def OrthancMessageHandler(websocket, path):
     OrthancMessaging.connected_instances.add(websocket)
+    config.LOGGER.debug(f"Orthanc websocket client registered with server.")
     try:
         consumer_task = asyncio.ensure_future(
             consumer_handler(websocket, path))
@@ -65,6 +66,7 @@ async def OrthancMessageHandler(websocket, path):
         for task in pending:
             task.cancel()
     finally:
+        config.LOGGER.info(f"Orthanc websocket client unregisterd with server.")
         OrthancMessaging.connected_instances.remove(websocket)
 
 
