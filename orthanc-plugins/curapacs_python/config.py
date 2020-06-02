@@ -30,6 +30,9 @@ HTTP_TIMEOUT = int(HTTP_TIMEOUT)
 LOCAL_HTTP_PORT = orthanc_config.get("HttpPort") or 8080
 LOCAL_HTTP_PORT = int(LOCAL_HTTP_PORT)
 LOCAL_WS_PORT = orthanc_config.get(curapacs_config_section, {}).get("WEBSOCKET_PORT", "") or 8081
+LOCAL_WS_KEEPALIVE_INTERVAL = orthanc_config.get(curapacs_config_section, {}).get(
+                                "WEBSOCKET_KEEPALIVE_INTERVAL", "") or 5
+LOCAL_WS_KEEPALIVE_INTERVAL = int(LOCAL_WS_KEEPALIVE_INTERVAL)
 LOCAL_UNIX_SOCKET_PATH = orthanc_config.get(curapacs_config_section, {}).get("UNIX_SOCKET_PATH", "") or "/tmp/curapacs.sock"
 LOCAL_HTTP_USER = list(orthanc_config.get("RegisteredUsers").keys())[0] or "orthanc"
 LOCAL_HTTP_PASSWORD = orthanc_config.get("RegisteredUsers", {}).get(LOCAL_HTTP_USER) or "orthanc"

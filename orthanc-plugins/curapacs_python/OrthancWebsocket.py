@@ -44,10 +44,15 @@ async def OrthancMessageHandlerClient(uri):
     config.LOGGER.debug(" OrthancMessageHandlerClient")
     auth_header = list(helpers.get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD).items())[0]
     while True:
-        config.LOGGER.debug(f"Websocket client connecting to {uri}")
-        async with websockets.connect(uri, extra_headers=[auth_header], ping_interval=10) as websocket_client:
-            async for message in websocket_client:
-                print("GOT MESSAGE: " + message)
+        try:
+            config.LOGGER.debug(f"Websocket client connecting to {uri}")
+            async with websockets.connect(uri, extra_headers=[auth_header], 
+                                        ping_interval=config.LOCAL_WS_KEEPALIVE_INTERVAL) as websocket_client:
+                async for message in websocket_client:
+                    print("GOT MESSAGE: " + message)
+        except websockets.exceptions.ConnectionClosedError:
+            config.LOGGER.info(f"Websocket connection terminated, retrying...")
+            asyncio.sleep(5)
     config.LOGGER.debug("Terminating OrthancMessageHandlerClient")
 
 async def OrthancMessageHandler(websocket, path):
@@ -60,7 +65,7 @@ async def OrthancMessageHandler(websocket, path):
             producer_handler(websocket, path))
         done, pending = await asyncio.wait(
             [consumer_task, producer_task],
-            timeout=20,
+            timeout=None,
             return_when=asyncio.FIRST_COMPLETED,
         )
         for task in pending:
