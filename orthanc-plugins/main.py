@@ -108,7 +108,7 @@ def worklist_worker(output, uri_path, **kwargs):
         if len(kwargs['groups']) == 1:
             worklist_id = kwargs['groups'][0]
             if len(worklist_id) == 40:
-                worklists = myworklist.create_available_worklists_response_dict(replace_tags_with_keywords=False, 
+                worklists = myworklist.create_available_worklists_response_dict(replace_tags_with_keywords=True, 
                                                                                 hashed_code=worklist_id)
             else:
                 message = f"Invalid worklist ID {worklist_id}"

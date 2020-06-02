@@ -4,6 +4,9 @@ import json
 import multiprocessing
 from curapacs_python import config
 from curapacs_python import helpers
+from curapacs_python.OrthancHost import OrthancHost
+from curapacs_python.OrthancMWLCreator import Worklist
+
 
 class OrthancMessage:
     """
@@ -13,26 +16,35 @@ class OrthancMessage:
     queue = asyncio.Queue()
 
     def __init__(self, message):
-        self.content = message.get("content",{})
-        self.type = message.get("type", "")
+        if isinstance(message, str):
+            message = json.loads(message)
+        self._content = message.get("content", {})
+        self._type = message.get("type", "")
     
     @property
     def content(self):
-        return self.content
+        return self._content
     
     @property
     def type(self):
-        return self.type
+        return self._type
+
+    def _get_new_worklist(self):
+        worklist_id = self.content["id"]
+        config.LOGGER.debug(f"Fetching worklist with id: {worklist_id}")
+        remote_orthanc = OrthancHost(config.PEER_URI,
+                             http_user=config.PEER_HTTP_USER,
+                             http_password=config.PEER_HTTP_PASSWORD)
+        worklist_as_json, _ = helpers.get_data(f"{remote_orthanc.url}/worklists/{worklist_id}")
+        worklist = Worklist(json=json.dumps(worklist_as_json))
+        worklist.create_worklist_from_json(worklist.json)
+        config.LOGGER.debug(f"Created new worklist.")
 
     def parse_by_type(self):
         if self.type == "new_worklist":
-            worklist_as_json = helpers.get_data()
-            from curapacs_python.OrthancMWLCreator import Worklist
-            worklist = Worklist(json="")
+            self._get_new_worklist()
         else:
             pass
-
-
 
 async def producer_handler(websocket, path):
     while True:
@@ -70,7 +82,9 @@ async def OrthancMessageHandlerClient(uri):
             async with websockets.connect(uri, extra_headers=[auth_header], 
                                         ping_interval=config.LOCAL_WS_KEEPALIVE_INTERVAL) as websocket_client:
                 async for message in websocket_client:
-                    print("GOT MESSAGE: " + message)
+                    config.LOGGER.debug(f"Websocket client received message: {message}")
+                    parser = OrthancMessage(message)
+                    parser.parse_by_type()
         except (websockets.exceptions.ConnectionClosedError, websockets.exceptions.InvalidStatusCode):
             config.LOGGER.info(f"Websocket connection terminated, retrying...")
             await asyncio.sleep(5)
