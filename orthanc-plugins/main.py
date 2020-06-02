@@ -120,7 +120,7 @@ def worklist_worker(output, uri_path, **kwargs):
     elif kwargs["method"] == "POST":
         myworklist = Worklist(json=kwargs["body"])
         response_dict = myworklist.create_worklist_from_json(myworklist.json)
-        helpers.send_over_unix_socket({"type": "new_worklist", "id": response_dict["id"]})
+        helpers.send_over_unix_socket({"type": "new_worklist", "content": {"id": response_dict["id"]}})
         output.AnswerBuffer(str(response_dict), 'application/json')
 
     elif kwargs["method"] == "DELETE":

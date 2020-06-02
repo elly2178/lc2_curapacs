@@ -5,23 +5,44 @@ import multiprocessing
 from curapacs_python import config
 from curapacs_python import helpers
 
-class OrthancMessaging:
+class OrthancMessage:
     """
     Send, Receives and parses messages"
     """
     connected_instances = set()
     queue = asyncio.Queue()
 
+    def __init__(self, message):
+        self.content = message.get("content",{})
+        self.type = message.get("type", "")
+    
+    @property
+    def content(self):
+        return self.content
+    
+    @property
+    def type(self):
+        return self.type
+
+    def parse_by_type(self):
+        if self.type == "new_worklist":
+            worklist_as_json = helpers.get_data()
+            from curapacs_python.OrthancMWLCreator import Worklist
+            worklist = Worklist(json="")
+        else:
+            pass
+
+
 
 async def producer_handler(websocket, path):
     while True:
-        message = await OrthancMessaging.queue.get()
-        config.LOGGER.debug(f"Sending Message to all connected instances: {message}")
-        if OrthancMessaging.connected_instances:
+        message = await OrthancMessage.queue.get()
+        config.LOGGER.debug(f"Sending message to all connected instances: {message}")
+        if OrthancMessage.connected_instances:
             await asyncio.wait([orthanc_websocket.send(message) for
-                                orthanc_websocket in OrthancMessaging.connected_instances])
-        OrthancMessaging.queue.task_done()
-        print(f"Sent Message, queue contents are {OrthancMessaging.queue}")
+                                orthanc_websocket in OrthancMessage.connected_instances])
+        OrthancMessage.queue.task_done()
+        print(f"Sent Message, queue contents are {OrthancMessage.queue}")
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
@@ -38,7 +59,7 @@ async def OrthancUnixSocketHandler(reader, writer):
         config.LOGGER.error(f"Failed to decode bytestring from unix socket")
         return
     config.LOGGER.debug(f"OrthancUnixSocketHandler forwarding message to all connected orthancs: {data}")
-    await OrthancMessaging.queue.put(data)
+    await OrthancMessage.queue.put(data)
 
 async def OrthancMessageHandlerClient(uri):
     config.LOGGER.debug(" OrthancMessageHandlerClient")
@@ -52,11 +73,11 @@ async def OrthancMessageHandlerClient(uri):
                     print("GOT MESSAGE: " + message)
         except (websockets.exceptions.ConnectionClosedError, websockets.exceptions.InvalidStatusCode):
             config.LOGGER.info(f"Websocket connection terminated, retrying...")
-            asyncio.sleep(5)
+            await asyncio.sleep(5)
     config.LOGGER.debug("Terminating OrthancMessageHandlerClient")
 
 async def OrthancMessageHandler(websocket, path):
-    OrthancMessaging.connected_instances.add(websocket)
+    OrthancMessage.connected_instances.add(websocket)
     config.LOGGER.debug(f"Orthanc websocket client registered with server.")
     try:
         consumer_task = asyncio.ensure_future(
@@ -72,7 +93,7 @@ async def OrthancMessageHandler(websocket, path):
             task.cancel()
     finally:
         config.LOGGER.info(f"Orthanc websocket client unregisterd with server.")
-        OrthancMessaging.connected_instances.remove(websocket)
+        OrthancMessage.connected_instances.remove(websocket)
 
 
 event_loop = asyncio.get_event_loop()

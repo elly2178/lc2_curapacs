@@ -131,7 +131,7 @@ class Worklist():
         if hashed_code is not None and hashed_code in response_dict.keys():
             tmp = response_dict[hashed_code]
             response_dict.clear()
-            response_dict[hashed_code] = tmp
+            response_dict = tmp
         return dumps(response_dict)
 
     def create_dataset_from_file(self, filepath):
