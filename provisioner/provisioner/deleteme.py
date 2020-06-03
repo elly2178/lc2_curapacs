@@ -1,12 +1,11 @@
+import sys
 from flask import Flask
 from helpers import k8s_config
-from routes.instances import OrthancInstancePodList
+from flask import Flask
 from flask_restful import reqparse, abort, Api, Resource
 
-k8s_config.load_kubernetes_config()
 app = Flask(__name__)
 api = Api(app)
-
 
 TODOS = {
     'todo1': {'task': 'build an API'},
@@ -55,13 +54,23 @@ class TodoList(Resource):
         TODOS[todo_id] = {'task': args['task']}
         return TODOS[todo_id], 201
 
+##
 ## Actually setup the Api resource routing here
+##
 api.add_resource(TodoList, '/todos')
 api.add_resource(Todo, '/todos/<todo_id>')
-api.add_resource(OrthancInstancePodList, '/instances')
 
-def main():
-    app.run(debug=True)
 
 if __name__ == '__main__':
-    main()
+    app.run(debug=True)
+
+
+
+#k8s_corev1, k8s_appsv1 = k8s_config.import_kubernetes_config()
+"""
+def main():
+    app.run(host=CURAPACS_CONFIG["provisioner_host"],
+            port=CURAPACS_CONFIG["provisioner_port"],
+            debug=True)
+
+"""

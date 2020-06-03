@@ -1,10 +1,22 @@
-from kubernetes import client, config
-from provisioner.config import CURAPACS_CONFIG
+import os
+from kubernetes import config
+from kubernetes.config.config_exception import ConfigException
+import config as provisioner_config
 
-def import_kubernetes_config():
+#https://github.com/kubernetes-client/python/blob/master/examples/in_cluster_config.py
+
+def load_kubernetes_config():
+    """
+    tries to load from k8s_auth_file, if file not found, try loading with service account credentials
+    """
     try:
-        config.load_kube_config(config_file=CURAPACS_CONFIG["k8s_auth_file"])
+        if os.path.isfile(provisioner_config.CURAPACS_CONFIG["k8s_auth_file"]):
+            config.load_kube_config(config_file=provisioner_config.CURAPACS_CONFIG["k8s_auth_file"])
     except FileNotFoundError:
-        print("failed to import kubeconfig at " + CURAPACS_CONFIG["k8s_auth_file"])
+        print("Failed to import kubeconfig at " + provisioner_config.CURAPACS_CONFIG["k8s_auth_file"])
+    try:
+        config.load_incluster_config()
+    except ConfigException:
+        print("Also failed to load incluster config, aborting.")
         raise
-    return client.CoreV1Api(), client.AppsV1Api()
+    

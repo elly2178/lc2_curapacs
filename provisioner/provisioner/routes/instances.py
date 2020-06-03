@@ -1,9 +1,28 @@
-from flask import jsonify
-from provisioner import app, k8s_corev1
-from provisioner.config import CURAPACS_CONFIG
+from kubernetes import client
+from config import CURAPACS_CONFIG
+from helpers.api_response_parser import PodListParser
+from flask_restful import Resource, fields, marshal_with
 
-@app.route("/instances", methods=["GET", "POST"])
-@app.route("/instances/<instance_id>", methods=["GET"])
+
+
+resource_fields = {
+    'name': fields.String,
+    'pod_ip': fields.String,
+    'namespace': fields.String,
+}
+
+
+class OrthancInstancePodList(Resource):
+    #@marshal_with(resource_fields, envelope='resource')
+    def get(self, **kwargs):
+        v1 = client.CoreV1Api()
+        response = v1.list_namespaced_pod(CURAPACS_CONFIG["namespace"])
+        parser = PodListParser(response)
+        return parser.get_pod_list()
+    
+    def post(self, **kwargs):
+        pass
+"""
 def instances(instance_id=None):
     instance_dict = {}
     pod_list = k8s_corev1.list_namespaced_pod(watch=False, namespace=CURAPACS_CONFIG["namespace"])
@@ -14,3 +33,4 @@ def instances(instance_id=None):
             instance_dict[labels["curamed.ch/customer"]] = {}
         instance_dict[labels["curamed.ch/customer"]][labels["app.kubernetes.io/name"]] = containers[0].image
     return jsonify(instance_dict)
+"""

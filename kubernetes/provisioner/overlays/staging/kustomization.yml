@@ -1,0 +1,14 @@
+---
+commonLabels:
+  app.kubernetes.io/name: provisioner
+  app.kubernetes.io/version: "1.0"
+  app.kubernetes.io/managed-by: engineering
+
+resources:
+- ../../resources
+
+namespace: curapacs
+
+images:
+- name: dumig1/curapacs-provisioner
+  newTag: "latest"
