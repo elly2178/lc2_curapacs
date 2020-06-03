@@ -2,6 +2,8 @@ import asyncio
 import websockets
 import json
 import multiprocessing
+import logging
+import sys
 from curapacs_python import config
 from curapacs_python import helpers
 from curapacs_python.OrthancHost import OrthancHost
@@ -36,9 +38,8 @@ class OrthancMessage:
                              http_user=config.PEER_HTTP_USER,
                              http_password=config.PEER_HTTP_PASSWORD)
         worklist_as_json, _ = helpers.get_data(f"{remote_orthanc.url}/worklists/{worklist_id}")
-        print("Worklist is: " + json.dumps(worklist_as_json))
         worklist = Worklist(json=json.dumps(worklist_as_json))
-        worklist.create_worklist_from_json(worklist.json)
+        worklist.create_worklist_from_dicom_json(worklist.json)
         config.LOGGER.debug(f"Created new worklist.")
 
     def parse_by_type(self):
@@ -75,7 +76,7 @@ async def OrthancUnixSocketHandler(reader, writer):
     await OrthancMessage.queue.put(data)
 
 async def OrthancMessageHandlerClient(uri):
-    config.LOGGER.debug(" OrthancMessageHandlerClient")
+    config.LOGGER.debug("Starting OrthancMessageHandlerClient")
     auth_header = list(helpers.get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD).items())[0]
     while True:
         try:
@@ -112,13 +113,14 @@ async def OrthancMessageHandler(websocket, path):
 
 
 event_loop = asyncio.get_event_loop()
+
 if not config.PARENT_NAME:
     config.LOGGER.info("Starting websocket server.")
     websocket_server = websockets.serve(OrthancMessageHandler, "0.0.0.0", config.LOCAL_WS_PORT)
     event_loop.run_until_complete(websocket_server)
 else:
     config.LOGGER.info("Starting websocket client.")
-    event_loop.create_task(OrthancMessageHandlerClient("ws://c0100-orthanc.curapacs.ch/ws"))
+    event_loop.create_task(OrthancMessageHandlerClient(config.PEER_WS_URI))
 unix_server = asyncio.start_unix_server(OrthancUnixSocketHandler, path=config.LOCAL_UNIX_SOCKET_PATH)
 event_loop.create_task(unix_server)
 ORTHANC_WEBSOCKET_PROCESS = multiprocessing.Process(target=event_loop.run_forever, name="orthanc async manager")
