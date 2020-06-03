@@ -34,7 +34,7 @@ data:
     
     com.softneta.meddream.pacs.configurations[0].type=Orthanc
     com.softneta.meddream.pacs.configurations[0].id=Orthanc
-    com.softneta.meddream.pacs.configurations[0].baseUrl=http://orthanc-web:8080
+    com.softneta.meddream.pacs.configurations[0].baseUrl=http://orthanc-web-CURAPACS_CUSTOMER:8080
     com.softneta.meddream.pacs.configurations[0].username=orthanc
     com.softneta.meddream.pacs.configurations[0].password=orthanc
 ---

@@ -3,35 +3,25 @@ import random
 import time
 import os
 import hashlib
-import logging
 import sys
 import copy
-import requests
 from json import loads, dumps
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 from pydicom.uid import generate_uid
 from pydicom.datadict import dictionary_VR, keyword_for_tag
+from curapacs_python import config
 
-LOG_FORMAT = "%(levelname)s %(asctime)s - %(message)s"
-logging_handler = logging.StreamHandler(sys.stdout)
-logging.basicConfig(handlers=[logging_handler], level=logging.DEBUG, format=LOG_FORMAT)
-LOGGER = logging.getLogger()
-
-try:
-    import orthanc
-except ImportError:
-    LOGGER.warning("Failed to import orthanc module.")
 
 class Worklist():
-    modality_worklist_path = os.environ.get("ORTHANC_WORKLIST_DIR", "/var/lib/orthanc/worklists")
-    modality_worklist_suffix = os.environ.get("ORTHANC_WORKLIST_SUFFIX", "wl")
-    
+    modality_worklist_path = config.WORKLISTS_DATABASE_DIRECTORY
+    modality_worklist_suffix = "wl"
+
     # set of rules that need to be respected
-    ruleset = [{"PatientID": str, "constraints": {"maxlength": 64, "returnkeytype": 1 }},
-               {"PatientName": str, "constraints": {"maxlength": 32, "isextendedalpha": True, "returnkeytype": 1 }},
-               {"Modality": str, "constraints": {"returnkeytype": 1 }},
-               {"ScheduledStationAETitle": str, "constraints": {"maxlength": 16, "returnkeytype": 1 }},
+    ruleset = [{"PatientID": str, "constraints": {"maxlength": 64, "returnkeytype": 1}},
+               {"PatientName": str, "constraints": {"maxlength": 32, "isextendedalpha": True, "returnkeytype": 1}},
+               {"Modality": str, "constraints": {"returnkeytype": 1}},
+               {"ScheduledStationAETitle": str, "constraints": {"maxlength": 16, "returnkeytype": 1}},
                {"ScheduledProcedureStepStartDate": str, "constraints": {"exactlength": 8, "isnumeric": True, "returnkeytype": 1}},
                {"ScheduledProcedureStepStartTime": str, "constraints": {"returnkeytype": 1}},
                {"ScheduledPerformingPhysicianName": str, "constraints": {"isextendedalpha": True, "returnkeytype": 2}}]
@@ -45,11 +35,11 @@ class Worklist():
     def create_worklist_from_json(self, json: dict):
         """
         A worklist is created using a json structure. This file contains the data
-        of the Patient, de modality,accession number and can be modified as much as desired.
-        First, the method checks if all the tags are present and if the rules of 
-        the tags are correct. Finally, the dataset gets written to disk. 
+        of the Patient, the modality, accession number and can be modified as much as desired.
+        First, the method checks if all the tags are present and if the rules of
+        the tags are correct. Finally, the dataset gets written to disk.
 
-        :param json: referes to the json file that will be created. Type: dictonary 
+        :param json: json dict containing info on worklist contents
         :returns: sha1 hash of filename created
         """
         for key, value in Worklist.flattenIterable(json):
@@ -58,19 +48,32 @@ class Worklist():
                     self.check_value(key, value, rule[key], **rule["constraints"])
                     break
         self.check_required_tags()
-        self.createDataSetFromJson()
+        pydicom_json = self.reformatJSON(json)
+        self.createDataSetFromJson(pydicom_json)
+        filehash = self.storeDataSetOnDisk()
+        return {"id": filehash}
+
+    def create_worklist_from_dicom_json(self, json: dict):
+        """
+        Expects the dicom json format, e.g. {"AccessionNumber": {"vr": "SH", "Value": ["4389400244813963"]}, ...}
+        and creates a worklist on disk
+
+        :param json: dicom json dict containing info on worklist contents
+        :returns: sha1 hash of filename created
+        """
+        self.createDataSetFromJson(json)
         filehash = self.storeDataSetOnDisk()
         return {"id": filehash}
     
     @classmethod
     def create_worklists_directory(cls):
         """
-        Class method. Tries to create directory on given path as defined by class variable modality_worklist_path 
+        Class method. Tries to create directory on given path as defined by class variable modality_worklist_path
         Do nothing if dir already exists
         """
         try:
             os.makedirs(cls.modality_worklist_path, exist_ok=True)
-            LOGGER.info(f"Worklist directory {cls.modality_worklist_path} created.")
+            config.LOGGER.info(f"Worklist directory {cls.modality_worklist_path} created.")
         except FileExistsError:
             pass
             
@@ -79,7 +82,7 @@ class Worklist():
     def flattenIterable(someiterable):
         """
         Unpacks lists, dictionaries and stores all the Data from them in a temporary List.
-        With each itteration, the list gets appended. 
+        With each itteration, the list gets appended.
 
         :param someiterable: any element type
         :returns: list of elementws"""
@@ -127,29 +130,29 @@ class Worklist():
         this method is used when someone does GET /worklists
         it returns a json with all worklists represented
 
-        Method creates a list of all the available worklists. 
-        :returns: serialize obj to a Json formatted string using conversion table 
+        Method creates a list of all the available worklists.
+        :returns: serialize obj to a Json formatted string using conversion table
         """
           
         response_dict = {}
         for worklist_filename in self.get_current_worklists():
             hashed_filename = self.hashme(worklist_filename)
             ds = self.create_dataset_from_file(Worklist.modality_worklist_path + "/" + worklist_filename)
-            response_dict[hashed_filename] = ds.to_json_dict()  
-        if replace_tags_with_keywords == True:             
+            response_dict[hashed_filename] = ds.to_json_dict()
+        if replace_tags_with_keywords:
             response_dict = self.replace_tags_with_keywords(response_dict)
         if hashed_code is not None and hashed_code in response_dict.keys():
             tmp = response_dict[hashed_code]
             response_dict.clear()
-            response_dict[hashed_code] = tmp
+            response_dict = tmp
         return dumps(response_dict)
 
     def create_dataset_from_file(self, filepath):
-        LOGGER.debug(f"Creating new pydicom dataset from file {filepath}")
+        config.LOGGER.debug(f"Creating new pydicom dataset from file {filepath}")
         return dcmread(filepath, stop_before_pixels=True)
 
     def hashme(self, string_to_hash):
-        LOGGER.debug(f"Worklist from file {string_to_hash} has been hashed")
+        config.LOGGER.debug(f"Worklist from file {string_to_hash} has been hashed")
         if string_to_hash != "":
             hashed_code = hashlib.sha1(string_to_hash.encode("utf-8")).hexdigest()
         else:
@@ -168,7 +171,7 @@ class Worklist():
             for file in existing_files:
                 if file.name.endswith(Worklist.modality_worklist_suffix):
                     worklist_list.append(file.name)
-        LOGGER.debug("Current worklists found on disk are: " + ", ".join(worklist_list))
+        config.LOGGER.debug("Current worklists found on disk are: " + ", ".join(worklist_list))
         return worklist_list
 
     def check_value(self, key, value, requiredType, **kwargs):
@@ -208,9 +211,9 @@ class Worklist():
                    raise ValueError("Value for key {} does not match pattern {}".format(key, match_pattern))
         return True
      
-    def createDataSetFromJson(self):
+    def createDataSetFromJson(self, pydicom_json):
         """creates self.pydicom_dataset from self.json"""
-        self.pydicom_dataset = Dataset.from_json(self.reformatJSON(self.json))
+        self.pydicom_dataset = Dataset.from_json(pydicom_json)
         meta_dataset = Dataset()
         meta_dataset.MediaStorageSOPClassUID = "1.2.276.0.7230010.3.1.0.1"
         meta_dataset.ImplementationClassUID = "1.2.276.0.7230010.3.0.3.6.4"
@@ -241,21 +244,21 @@ class Worklist():
 
     def check_required_tags(self):
         """
-        Verifies if all the required json keys are present and 
+        Verifies if all the required json keys are present and
         respects all the given constraints
         
         :returns: True if all the constraints are correct """
         json_keys = [json_tuple[0] for json_tuple in Worklist.flattenIterable(self.json)]
-        LOGGER.debug(f"json_keys are {json_keys}")
+        config.LOGGER.debug(f"json_keys are {json_keys}")
         for rule in Worklist.ruleset:
             returnkeytype = rule["constraints"].get("returnkeytype", 3)
-            for key in rule.keys():
+            for key in rule:
                 if key == "constraints":
                     continue
                 if key not in json_keys and returnkeytype in (1, 2):
                     raise KeyError(f"Required DICOM tag \"{key}\" not found in json structure.")
         return True
-                      
+
     def storeDataSetOnDisk(self):
         """writes Dataset (Worklist DICOM File) to disk, filename is a timestamp."""
         index = 0
@@ -270,17 +273,17 @@ class Worklist():
         self.pydicom_dataset.save_as(concatination_file_name)
         return self.hashme(filename)
 
-    def generateAccessionNumber(self,minlength=8):
-        return str(random.randint(10**minlength,10**16-1))
+    def generateAccessionNumber(self, minlength=8):
+        return str(random.randint(10**minlength, 10**16-1))
 
     def generateStudyID(self):
         return generate_uid()
-    
+
     def http_delete(self, hashed_code: str):
         """ 
         Delete the desired Worklist with the hash hashed_code
 
-        :param hashed_code: str hashed information of the worklist to be deleted 
+        :param hashed_code: str hashed information of the worklist to be deleted
         """
         # get the list of existing worklists
         # compare hashed_code local to given hashed_code for each element in worklists
@@ -289,42 +292,17 @@ class Worklist():
                 os.remove(os.path.join(Worklist.modality_worklist_path, filename_of_exsisting_worklist))
                 break
         else:
-            LOGGER.error(f"User ordered deletion of non existing worklist (hash {hashed_code})")
+            config.LOGGER.error(f"User ordered deletion of non existing worklist (hash {hashed_code})")
             raise FileNotFoundError(f"The worklist corresponding to hash {hashed_code} does not exist.")
-        
         return hashed_code
-
-      
-if __name__ == "__main__":
-    json1 = {
-    "PatientID": "11788770005213",
-    "PatientName": "Armon",
-    "ScheduledProcedureStepSequence": [
-    {
-    "Modality": "US",
-    "ScheduledStationAETitle": "PhillipsUS01",
-    "ScheduledProcedureStepStartDate": "20200427",
-    "ScheduledProcedureStepStartTime": "100000",
-    "ScheduledPerformingPhysicianName": "Max^Messermann"    
-    },
-    {
-    "Modality": "US",
-    "ScheduledStationAETitle": "PhillipsUS01",
-    "ScheduledProcedureStepStartDate": "20200429",
-    "ScheduledProcedureStepStartTime": "121650",
-    "ScheduledPerformingPhysicianName": "Max^Messermann"
-    }]
-    }
-    someworklist = Worklist(dumps(json1))
-    print(someworklist.create_available_worklists_response_dict())
 
 
 def worklist_worker(output, uri_path, **kwargs):
     """
     Uses methods GET, POST as a response to the server/ user.
     With Delete, allows a worklist to be deleted
-    :param output: 
-    :param **kwargs: key word argumants 
+    :param output: orthanc output object used to create responses
+    :param **kwargs: key word arguments, e.g. body of request
     """
     print("KWARGS : " + str(kwargs))
     if kwargs["method"] == "GET":
@@ -339,7 +317,7 @@ def worklist_worker(output, uri_path, **kwargs):
                                                                                 hashed_code=worklist_id)
             else:
                 message = f"Invalid worklist ID {worklist_id}"
-                output.SendHttpStatus(400, message, len(message))              
+                output.SendHttpStatus(400, message, len(message))
         else:
             worklists = myworklist.create_available_worklists_response_dict()
         output.AnswerBuffer(str(worklists), 'application/json')
@@ -355,19 +333,12 @@ def worklist_worker(output, uri_path, **kwargs):
             hashed_id_of_worklist = kwargs['groups'][0]
             print(hashed_id_of_worklist)
         except IndexError:
-            LOGGER.error("Hashed Nr for Worklist to delete not given")
+            config.LOGGER.error("Hashed Nr for Worklist to delete not given.")
             raise
         myworklist = Worklist()
         try:
             myworklist.http_delete(hashed_id_of_worklist)
-        except FileNotFoundError as error:        
+        except FileNotFoundError as error:
             output.SendHttpStatus(400, f"{error}", len(str(error)))
             return
         output.AnswerBuffer("{}", 'application/json')
-
-
-if "orthanc" in sys.modules.keys():
-    Worklist.create_worklists_directory()
-    orthanc.RegisterRestCallback('/worklists', worklist_worker)
-    orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
-

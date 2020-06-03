@@ -1,8 +1,12 @@
 import sys
 import json
 import requests
+import socket
+from curapacs_python import helpers
 from curapacs_python import config
 from curapacs_python.OrthancHost import OrthancHost
+from curapacs_python.OrthancMWLCreator import Worklist
+from curapacs_python.OrthancWebsocket import OrthancMessage
 
 try:
     import orthanc
@@ -12,11 +16,11 @@ except ImportError:
 def enhance_query(output, uri_path, **kwargs):
     config.LOGGER.debug(f"{uri_path} called with body: {kwargs['body']}")
     local_orthanc = OrthancHost(f"http://localhost:{config.LOCAL_HTTP_PORT}",
-                            http_user=config.HTTP_USER,
-                            http_password=config.HTTP_PASSWORD)
-    remote_orthanc = OrthancHost(config.ORTHANC_URI,
-                             http_user=config.HTTP_USER,
-                             http_password=config.HTTP_PASSWORD)
+                            http_user=config.LOCAL_HTTP_USER,
+                            http_password=config.LOCAL_HTTP_PASSWORD)
+    remote_orthanc = OrthancHost(config.PEER_URI,
+                             http_user=config.PEER_HTTP_USER,
+                             http_password=config.PEER_HTTP_PASSWORD)
 
     request_body_dict = local_orthanc.getDictFromRequestBody(kwargs["body"])
     config.LOGGER.debug(f"Request body decoded to: {request_body_dict}")
@@ -75,11 +79,10 @@ def enhance_query(output, uri_path, **kwargs):
     if output is not None:
         output.AnswerBuffer(dicom_list_as_json, 'application/json')
 
-
 def enhance_c_move():
     pass
 
-def forward_instance(changeType, level, resource):
+def on_change(changeType, level, resource):    
     if changeType == orthanc.ChangeType.NEW_INSTANCE:
         body = json.dumps({"Resources": [resource], "Asynchronous": True})
         config.LOGGER.debug(f"Change Callback started, type: {changeType}, body: {body}")
@@ -87,10 +90,60 @@ def forward_instance(changeType, level, resource):
         result = orthanc.RestApiPost(f"/peers/{config.PEER_NAME}/store", body)
         result_dict = json.loads(result.decode())
         config.LOGGER.debug(f"Orthanc job with ID {result_dict['ID']} started.")
+    if changeType == orthanc.ChangeType.ORTHANC_STARTED:
+        pass
+    if changeType == orthanc.ChangeType.ORTHANC_STOPPED:
+        pass
+
+def worklist_worker(output, uri_path, **kwargs):
+    """
+    Uses methods GET, POST as a response to the server/ user.
+    With Delete, allows a worklist to be deleted
+    :param output: 
+    :param **kwargs: key word arguments 
+    """
+    config.LOGGER.debug(f"worklist_worker called with kwargs: {kwargs}")
+    if kwargs["method"] == "GET":
+        myworklist = Worklist()
+        if len(kwargs['groups']) == 1:
+            worklist_id = kwargs['groups'][0]
+            if len(worklist_id) == 40:
+                worklists = myworklist.create_available_worklists_response_dict(replace_tags_with_keywords=True,
+                                                                                hashed_code=worklist_id)
+            else:
+                message = f"Invalid worklist ID {worklist_id}"
+                output.SendHttpStatus(400, message, len(message))
+        else:
+            worklists = myworklist.create_available_worklists_response_dict()
+        output.AnswerBuffer(str(worklists), 'application/json')
+        
+    elif kwargs["method"] == "POST":
+        myworklist = Worklist(json=kwargs["body"])
+        response_dict = myworklist.create_worklist_from_json(myworklist.json)
+        helpers.send_over_unix_socket({"type": "new_worklist", "content": {"id": response_dict["id"]}})
+        output.AnswerBuffer(str(response_dict), 'application/json')
+
+    elif kwargs["method"] == "DELETE":
+        try:
+            hashed_id_of_worklist = kwargs['groups'][0]
+            print(hashed_id_of_worklist)
+        except IndexError:
+            config.LOGGER.error("Hashed value for worklist to delete not given")
+            raise
+        myworklist = Worklist()
+        try:
+            myworklist.http_delete(hashed_id_of_worklist)
+        except FileNotFoundError as error:
+            output.SendHttpStatus(400, f"{error}", len(str(error)))
+            return
+        output.AnswerBuffer("{}", 'application/json')
+
 
 if "orthanc" in sys.modules:
-    orthanc.RegisterRestCallback('/enhancequery', enhance_query)
-    orthanc.RegisterOnChangeCallback(forward_instance)
-else:
-    sample_body = b'{"0008,0052":"Patient", "0010,0010":"PATIENT C", "0010,0020":""}'
-    enhance_query(None, "/enhancequery", body=sample_body)
+    Worklist.create_worklists_directory()
+    if config.PARENT_NAME:
+        orthanc.RegisterRestCallback('/enhancequery', enhance_query)
+        orthanc.RegisterOnChangeCallback(on_change)
+    else:
+        orthanc.RegisterRestCallback('/worklists', worklist_worker)
+        orthanc.RegisterRestCallback('/worklists/(.*)', worklist_worker)
