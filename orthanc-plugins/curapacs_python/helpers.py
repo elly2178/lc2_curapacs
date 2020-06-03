@@ -1,6 +1,7 @@
 import json
 import base64
 import requests
+import socket
 from curapacs_python import config
 
 def post_data(url, data, headers=None, timeout=config.HTTP_TIMEOUT, is_json=True):
@@ -10,8 +11,8 @@ def post_data(url, data, headers=None, timeout=config.HTTP_TIMEOUT, is_json=True
     config.LOGGER.debug(f"post_data called with args: {url}, headers: {headers}, body with size: {len(data)}")
     if headers is None:
         headers = {}
-    if config.HTTP_USER:
-        headers.update(get_http_auth_header(config.HTTP_USER, config.HTTP_PASSWORD))
+    if config.PEER_HTTP_USER:
+        headers.update(get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD))
     if is_json:
         headers.update({"Content-Type": "application/json"})
         response = requests.post(url, json=data, headers=headers, timeout=timeout)
@@ -31,8 +32,8 @@ def get_data(url, headers=None, timeout=config.HTTP_TIMEOUT):
     """
     if not headers:
         headers = {}
-    if config.HTTP_USER:
-        headers.update(get_http_auth_header(config.HTTP_USER, config.HTTP_PASSWORD))
+    if config.PEER_HTTP_USER:
+        headers.update(get_http_auth_header(config.PEER_HTTP_USER, config.PEER_HTTP_PASSWORD))
     headers.update({"Accept":"application/json"})
     response = requests.get(url, headers=headers, timeout=timeout)
     if response.status_code > 299:
@@ -53,3 +54,15 @@ def get_http_auth_header(username, password):
     """
     b64string = base64.b64encode(bytes("{}:{}".format(username, password), encoding="utf-8"))
     return {"Authorization": "Basic {}".format(b64string.decode())}
+
+def send_over_unix_socket(message):
+    if isinstance(message, dict):
+        data = json.dumps(message)
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        sock.connect(config.LOCAL_UNIX_SOCKET_PATH)
+        sock.sendall(data.encode("utf-8"))
+        config.LOGGER.debug(f"Sent message over unix socket: {message}")
+        sock.close()
+    except (OSError, TypeError):
+        config.LOGGER.error(f"Failed to open socket connection with {config.LOCAL_UNIX_SOCKET_PATH}")

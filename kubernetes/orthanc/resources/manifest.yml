@@ -53,17 +53,20 @@ apiVersion: v1
 metadata:
   name: orthanc-config-cm
 data:
-  DICOM_MODALITIES: '{ "Befundungsstation" : [ "BAG_MONITOR", "192.168.0.8", 11112 ], "FINDSCU-UTILITY": [ "FINDSCU", "10.42.0.1", 104 ] }'
-  AC_REGISTERED_USERS: '{ "orthanc": "orthanc" }'
-  PEERS: '{"orthanc-peer" : [ "http://c0100-peer.curapacs.ch" ]}'
+  ORTHANC__NAME: "CURAPACS"
   HTTP_PORT: "8080"
-  PG_ENABLED: "true"
-  PG_HOST: "orthanc-postgres-CURAPACS_CUSTOMER"
-  PG_DB: "orthanc"
-  PG_USER: "orthanc"
-  PG_PASSWORD: "orthanc"
+  POSTGRESQL_PLUGIN_ENABLED: "true"
+  ORTHANC__POSTGRESQL__HOST: "orthanc-postgres-CURAPACS_CUSTOMER"
+  ORTHANC__POSTGRESQL__DATABASE: "orthanc"
+  ORTHANC__POSTGRESQL__USERNAME: "orthanc"
+  ORTHANC__POSTGRESQL__PASSWORD: "orthanc"
   PYTHON_PLUGIN_ENABLED: "true"
+  ORTHANC__PYTHON_SCRIPT: "/usr/share/orthanc/curapacs/main.py"
   WORKLISTS_PLUGIN_ENABLED: "true"
+  ORTHANC__REGISTERED_USERS: '{"orthanc": "orthanc"}'
+  ORTHANC__DICOM_MODALITIES: '{"FINDSCU-UTILITY": ["FINDSCU", "10.42.0.1", 104]}'
+  ORTHANC__ORTHANC_PEERS: '{"orthanc-peer": [ "http://CURAPACS_CUSTOMER-peer.curapacs.ch" ]}'
+  ORTHANC__CURAPACS: '{"HTTP_TIMEOUT": "4"}'
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -74,16 +77,35 @@ spec:
   template:
     spec:
       automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 101
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"
+      initContainers:
+        - name: init-fetch-python-scripts
+          image: alpine
+          command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/orthanc_peering https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/orthanc-plugins && mv main.py curapacs_python/ /mnt/curapacs-python-plugins/python ; chmod -R 775 /mnt/curapacs-python-plugins/python']
+          volumeMounts:
+            - name: curapacs-python-plugins-vol
+              mountPath: /mnt/curapacs-python-plugins/python
       containers:
         - name: orthanc
-          image: osimis/orthanc
+          image: dumig1/orthanc-python
+          #command: ["/bin/bash"]
+          #args: ["-c", "sleep 500"]
           envFrom:
             - configMapRef:
                 name: orthanc-config-cm
           volumeMounts:
             - name: tz-config
               mountPath: /etc/localtime
+            - name: curapacs-python-plugins-vol
+              mountPath: /usr/share/orthanc/curapacs
       volumes:
         - name: tz-config
           hostPath:
             path: /usr/share/zoneinfo/Europe/Zurich
+        - name: curapacs-python-plugins-vol
+          emptyDir: {}

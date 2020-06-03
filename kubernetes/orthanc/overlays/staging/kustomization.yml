@@ -13,8 +13,8 @@ resources:
 namespace: curapacs
 
 images:
-- name: osimis/orthanc
-  newTag: "20.4.2"
+- name: dumig1/orthanc-python
+  newTag: "27-05-rc2"
 
 patches:
 - path: ingress_patch.json
