@@ -1,16 +1,16 @@
 from kubernetes import client
-from helpers.config import CURAPACS_CONFIG
+from flask_restful import Resource, fields, marshal_with, reqparse
+from helpers.config import CURAPACS_CONFIG, CURAPACS_K8S_COMPONENTS
 from helpers.api_response_parser import PodListParser
 from helpers.instance_creator import manipulate_components
-from flask_restful import Resource, fields, marshal_with
 
 
-resource_fields = {
-    'name': fields.String,
-    'pod_ip': fields.String,
-    'namespace': fields.String,
-}
+reqparser = reqparse.RequestParser()
+reqparser.add_argument('curapacs_customer', type=str, help='customer designation, e.g. c0100, c0594 ...', required=True)
+reqparser.add_argument('components', type=str, help=f'Comma separated list, component name in: {CURAPACS_K8S_COMPONENTS.keys()}', default="")
+args = reqparser.parse_args(strict="true")
 
+curapacs_components = args.components.split(",") if args.components else []
 
 class OrthancInstancePodList(Resource):
     def get(self, **kwargs):
@@ -20,17 +20,7 @@ class OrthancInstancePodList(Resource):
         return parser.get_pod_list()
     
     def post(self, **kwargs):
-        manipulate_components(mode="apply")
-
-"""
-def instances(instance_id=None):
-    instance_dict = {}
-    pod_list = k8s_corev1.list_namespaced_pod(watch=False, namespace=CURAPACS_CONFIG["namespace"])
-    for pod_definition in pod_list.items:
-        labels = pod_definition.metadata.labels
-        containers = pod_definition.spec.containers
-        if labels["curamed.ch/customer"] not in instance_dict:
-            instance_dict[labels["curamed.ch/customer"]] = {}
-        instance_dict[labels["curamed.ch/customer"]][labels["app.kubernetes.io/name"]] = containers[0].image
-    return jsonify(instance_dict)
-"""
+        manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
+    
+    def delete(self, **kwargs):
+        manipulate_components(args.curapacs_customer, mode="delete", components=curapacs_components)

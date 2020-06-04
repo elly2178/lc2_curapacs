@@ -1,22 +1,20 @@
 import subprocess
-from flask_restful import abort
+from flask_restful import abort, reqparse
 from helpers.config import CURAPACS_CONFIG, CURAPACS_K8S_COMPONENTS
 
 
-CURAPACS_DOMAIN = "curapacs.ch"
-CURAPACS_CUSTOMER = "c0100"
-
-#kustomize build  kubernetes/provisioner/overlays/staging/ | 
-#python3 kubernetes/templating.py --CURAPACS_DOMAIN curapacs.ch --CURAPACS_CUSTOMER c0100 | 
-#kubectl apply -f -
-CURAPACS_K8S_COMPONENTS = ["meddream-viewer"]
-
-def manipulate_components(mode="apply"):
+def manipulate_components(curapacs_customer, mode="apply", components=[], curapacs_domain=CURAPACS_CONFIG['curapacs_domain']):
+    if not components:
+        components = CURAPACS_K8S_COMPONENTS
+    else:
+        for component in components:
+            if component not in CURAPACS_K8S_COMPONENTS:
+                abort(400, message=f"Unknown component {component}.")
     if mode not in ("apply", "delete"):
-        abort(400, message=f"Bade mode {mode} detected")
-    for component in CURAPACS_K8S_COMPONENTS:
+        abort(400, message=f"Bad mode {mode} detected")
+    for component in components:
         try:
-            kustomize_output = subprocess.Popen(f"kustomize build {CURAPACS_CONFIG['manifests_dir']}/{component}/overlays/{CURAPACS_CONFIG['kustomize_overlay_environment']}/ | python3 {CURAPACS_CONFIG['manifests_dir']}/templating.py --CURAPACS_DOMAIN {CURAPACS_DOMAIN} --CURAPACS_CUSTOMER {CURAPACS_CUSTOMER} | kubectl {mode} -f -",
+            kustomize_output = subprocess.Popen(f"kustomize build {CURAPACS_CONFIG['manifests_dir']}/{component}/overlays/{CURAPACS_CONFIG['kustomize_overlay_environment']}/ | python3 {CURAPACS_CONFIG['manifests_dir']}/templating.py --CURAPACS_DOMAIN {curapacs_domain} --CURAPACS_CUSTOMER {curapacs_customer} | kubectl {mode} -f -",
                                             stdin=subprocess.PIPE,
                                             shell=True)
             """
