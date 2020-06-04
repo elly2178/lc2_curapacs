@@ -1,8 +1,8 @@
 from kubernetes import client
-from config import CURAPACS_CONFIG
+from helpers.config import CURAPACS_CONFIG
 from helpers.api_response_parser import PodListParser
+from helpers.instance_creator import manipulate_components
 from flask_restful import Resource, fields, marshal_with
-
 
 
 resource_fields = {
@@ -21,7 +21,8 @@ class OrthancInstancePodList(Resource):
         return parser.get_pod_list()
     
     def post(self, **kwargs):
-        pass
+        manipulate_components(mode="apply")
+
 """
 def instances(instance_id=None):
     instance_dict = {}
