@@ -17,14 +17,7 @@ def manipulate_components(curapacs_customer, mode="apply", components=[], curapa
             kustomize_output = subprocess.Popen(f"kustomize build {CURAPACS_CONFIG['manifests_dir']}/{component}/overlays/{CURAPACS_CONFIG['kustomize_overlay_environment']}/ | python3 {CURAPACS_CONFIG['manifests_dir']}/templating.py --CURAPACS_DOMAIN {curapacs_domain} --CURAPACS_CUSTOMER {curapacs_customer} | kubectl {mode} -f -",
                                             stdin=subprocess.PIPE,
                                             shell=True)
-            """
-            templating_output = subprocess.Popen(f"{CURAPACS_CONFIG['manifests_dir']}/templating.py --CURAPACS_DOMAIN {CURAPACS_DOMAIN} --CURAPACS_CUSTOMER {CURAPACS_CUSTOMER}".split(),
-                                            stdin=kustomize_output.stdout,
-                                            stdout=subprocess.PIPE)
-            kubectl_output = subprocess.Popen(f"kubectl {mode} -f -".split(),
-                                            stdin=templating_output.stdout,
-                                            stdout=subprocess.PIPE)
-            """
         except subprocess.CalledProcessError as error:
             abort(400, message=f"{error.cmd} failed, status {error.returncode}, output: {error.stdout}, stderr: {error.stderr}")
-
+    
+    return {"success": True, mode: components}

@@ -20,11 +20,11 @@ class OrthancInstancePodList(Resource):
         print(str(kwargs))
         args = reqparser.parse_args(strict="true")
         curapacs_components = args.components.split(",") if args.components else []
-        manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
-        return {}, 200 
+        results = manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
+        return results, 200
     
     def delete(self, **kwargs):
         args = reqparser.parse_args(strict="true")
         curapacs_components = args.components.split(",") if args.components else []
-        manipulate_components(args.curapacs_customer, mode="delete", components=curapacs_components)
-        return {}, 200 
+        results = manipulate_components(args.curapacs_customer, mode="delete", components=curapacs_components)
+        return results, 200

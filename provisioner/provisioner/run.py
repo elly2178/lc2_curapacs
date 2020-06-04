@@ -7,8 +7,6 @@ k8s_config.load_kubernetes_config()
 app = Flask(__name__)
 api = Api(app)
 
-
-
 api.add_resource(OrthancInstancePodList, '/instances')
 
 def main():
