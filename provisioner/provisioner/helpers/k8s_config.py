@@ -12,6 +12,7 @@ def load_kubernetes_config():
     try:
         if os.path.isfile(provisioner_config.CURAPACS_CONFIG["k8s_auth_file"]):
             config.load_kube_config(config_file=provisioner_config.CURAPACS_CONFIG["k8s_auth_file"])
+            return
     except FileNotFoundError:
         print("Failed to import kubeconfig at " + provisioner_config.CURAPACS_CONFIG["k8s_auth_file"])
     try:

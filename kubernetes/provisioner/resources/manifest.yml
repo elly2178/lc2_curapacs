@@ -33,9 +33,23 @@ metadata:
   name: curapacs-provisioner
 spec:
   ports:
-    - name: curapacs-provisioner
+    - name: provisioner
       protocol: TCP
-      port: 8080
+      port: 8080    
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: curapacs-provisioner
+spec:
+  rules:
+  - host: orthanc.somedomain.ch
+    http:
+      paths:
+      - backend:
+          serviceName: curapacs-provisioner
+          servicePort: provisioner
+        path: /
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56,7 +70,7 @@ spec:
       initContainers:
         - name: init-fetch-provisioner-source
           image: alpine
-          command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/provisioner https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/ && cp -r provisioner/ kubernetes/ /opt/provisioner ; chmod -R 775 /opt/provisioner/provisioner']
+          command: ['ash', '-c', 'apk update && apk add --no-cache git && cd /tmp && git clone -b feature/provisioner https://github.com/elly2178/lc2_curapacs.git && cd /tmp/lc2_curapacs/ && cp -r provisioner/provisioner/ kubernetes/ /opt/provisioner ; chown -R 1001 /opt/provisioner && chmod -R 775 /opt/provisioner/provisioner']
           volumeMounts:
             - name: curapacs-provisioner-vol
               mountPath: /opt/provisioner
@@ -64,8 +78,10 @@ spec:
         - name: curapacs-provisioner
           image: dumig1/curapacs-provisioner
           command: ["/bin/bash"]
-          args: ["-c", "sleep 500"]
+          args: ["-c", "cd /opt/provisioner/provisioner/; exec gunicorn -w3 run:app"]
           env:
+            - name: "GUNICORN_CMD_ARGS"
+              value: "--bind=0.0.0.0:8080 --workers=3 --chdir=/opt/provisioner/provisioner/"
             - name: "CURAPACS_K8S_AUTH_FILE"
               value: ""
             - name: "CURAPACS_MANIFESTS_DIR"

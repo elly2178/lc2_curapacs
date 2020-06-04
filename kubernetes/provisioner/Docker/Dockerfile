@@ -1,5 +1,7 @@
 FROM docker.io/python:3.7
 
+RUN useradd --user-group --create-home --no-log-init --shell /bin/nologin --uid 1001 gunicorn
+
 WORKDIR /tmp
 RUN apt-get upgrade -y && \
     apt-get update -y && \
@@ -9,5 +11,5 @@ RUN apt-get upgrade -y && \
     chmod 755 /usr/bin/kustomize && \
     rm -f kustomize kustomize.tgz && \
     pip install --no-cache-dir flask_restful gunicorn kubernetes
-ENV GUNICORN_CMD_ARGS="--bind=0.0.0.0"
-CMD [ "gunicorn", "/opt/provisioner/run.py:main()" ]
+USER gunicorn
+CMD [ "gunicorn", "/opt/provisioner/provisioner/run:app" ]

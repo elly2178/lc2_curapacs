@@ -12,3 +12,12 @@ namespace: curapacs
 images:
 - name: dumig1/curapacs-provisioner
   newTag: "latest"
+
+patches:
+- path: ingress_patch.json
+  target:
+    group: extensions
+    version: v1beta1
+    kind: Ingress
+    name: curapacs-provisioner
+

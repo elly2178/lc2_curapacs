@@ -1,8 +1,8 @@
 ---
-nameSuffix: -c0100
+nameSuffix: -CURAPACS_CUSTOMER
 
 commonLabels:
-  curamed.ch/customer: c0100
+  curamed.ch/customer: CURAPACS_CUSTOMER
   app.kubernetes.io/name: orthanc
   app.kubernetes.io/version: "1.0"
   app.kubernetes.io/managed-by: curapacs-provisioner
