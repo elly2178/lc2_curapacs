@@ -17,6 +17,7 @@ class OrthancInstancePodList(Resource):
         return parser.get_pod_list(), 200
     
     def post(self, **kwargs):
+        print(str(kwargs))
         args = reqparser.parse_args(strict="true")
         curapacs_components = args.components.split(",") if args.components else []
         manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
