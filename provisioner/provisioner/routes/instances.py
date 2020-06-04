@@ -14,14 +14,16 @@ class OrthancInstancePodList(Resource):
         v1 = client.CoreV1Api()
         response = v1.list_namespaced_pod(CURAPACS_CONFIG["namespace"])
         parser = PodListParser(response)
-        return parser.get_pod_list()
+        return parser.get_pod_list(), 200
     
     def post(self, **kwargs):
         args = reqparser.parse_args(strict="true")
         curapacs_components = args.components.split(",") if args.components else []
         manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
+        return {}, 200 
     
     def delete(self, **kwargs):
         args = reqparser.parse_args(strict="true")
         curapacs_components = args.components.split(",") if args.components else []
         manipulate_components(args.curapacs_customer, mode="delete", components=curapacs_components)
+        return {}, 200 
