@@ -1,4 +1,4 @@
-import config as provisioner_config
+from helpers.config import CURAPACS_K8S_COMPONENTS
 
 class APIResponseParser:
     """

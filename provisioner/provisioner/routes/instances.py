@@ -13,7 +13,6 @@ resource_fields = {
 
 
 class OrthancInstancePodList(Resource):
-    #@marshal_with(resource_fields, envelope='resource')
     def get(self, **kwargs):
         v1 = client.CoreV1Api()
         response = v1.list_namespaced_pod(CURAPACS_CONFIG["namespace"])
