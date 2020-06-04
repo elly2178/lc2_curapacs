@@ -8,9 +8,6 @@ from helpers.instance_creator import manipulate_components
 reqparser = reqparse.RequestParser()
 reqparser.add_argument('curapacs_customer', type=str, help='customer designation, e.g. c0100, c0594 ...', required=True)
 reqparser.add_argument('components', type=str, help=f'Comma separated list, component name in: {CURAPACS_K8S_COMPONENTS.keys()}', default="")
-args = reqparser.parse_args(strict="true")
-
-curapacs_components = args.components.split(",") if args.components else []
 
 class OrthancInstancePodList(Resource):
     def get(self, **kwargs):
@@ -20,7 +17,11 @@ class OrthancInstancePodList(Resource):
         return parser.get_pod_list()
     
     def post(self, **kwargs):
+        args = reqparser.parse_args(strict="true")
+        curapacs_components = args.components.split(",") if args.components else []
         manipulate_components(args.curapacs_customer, mode="apply", components=curapacs_components)
     
     def delete(self, **kwargs):
+        args = reqparser.parse_args(strict="true")
+        curapacs_components = args.components.split(",") if args.components else []
         manipulate_components(args.curapacs_customer, mode="delete", components=curapacs_components)
