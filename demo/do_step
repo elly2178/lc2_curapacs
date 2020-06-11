@@ -1,0 +1,65 @@
+#!/bin/bash
+
+CURAPACS_DIR="/home/armon/lc2/lc2_curapacs"
+TESTDATA_DIR="/home/armon/lc2/testdaten/"
+
+export STEP=$1
+
+if [[ ${STEP} == "provisioner" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "Provisioner erstellen." bla
+	kustomize build  kubernetes/provisioner/overlays/staging/ | python3 kubernetes/templating.py --CURAPACS_DOMAIN curapacs.ch --CURAPACS_CUSTOMER c0100 | kubectl apply -f -
+fi
+
+
+if [[ ${STEP} == "curapacs_c0100" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "Neue curaPACS-Instanz für Kunde c0100 erstellen." bla
+	curl -d "curapacs_customer=c0100"  provisioner.curapacs.ch/instances
+fi
+
+if [[ ${STEP} == "create_orthanc_peer" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "Orthanc Peer erstellen." bla
+	orthanc-plugins/command.sh
+fi
+
+if [[ ${STEP} == "create_worklist" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "DICOM Worklist erstellen." bla
+	echo
+	curl -d @mwl_server/sample_request.json  --user 'orthanc:orthanc' 'c0100-orthanc.curapacs.ch/worklists'
+fi
+
+
+if [[ ${STEP} == "search_worklist" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "DICOM Worklist suchen." bla
+	echo
+	findscu -W  -k PatientName="P*" -k StudyID="*" -k PatientID="*" -k AccessionNumber="*" -k "(0040,0100)[0].Modality"="*" -k "(0040,0100)[0].ScheduledStationAETitle"="*" -k "(0040,0100)[0].ScheduledPerformingPhysicianName"="*"  localhost 4242
+fi
+
+if [[ ${STEP} == "store_images" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "DICOM Bilddaten zu Patient B archivieren." bla
+	storescu --propose-lossless --scan-directories localhost 4242 ../testdaten/PATIENT_B/* 2> /dev/null
+	echo
+	echo SUCCESS
+fi
+
+if [[ ${STEP} == "find_images" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "DICOM Bilddaten zu Patient B suchen" bla
+	echo
+	findscu -P -k InstitutionName="*" -k QueryRetrieveLevel="Instance" -k PatientName="PATIENT B" localhost 4242 ../testdaten/DICOM_CFIND/sample_find.dcm
+	echo
+fi
+
+if [[ ${STEP} == "store_video" ]]; then
+	cd $CURAPACS_DIR
+	read -sp "DICOM US zu Patient E archivieren" bla
+	echo
+	storescu -v --propose-lossless --scan-directories orthanc-c0100.curapacs.ch 4242 ../testdaten/PATIENT_E/*
+	echo
+fi
+
