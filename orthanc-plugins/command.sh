@@ -1,5 +1,5 @@
 #!/bin/bash
-docker run -p 4242:4242 -p 8042:8042 --rm \
+docker run -p 4242:4242 -p 8080:8080 --rm \
   -v $PWD/orthanc-plugins/orthanc.json:/etc/orthanc/orthanc.json:ro \
   -v $PWD/orthanc-plugins/main.py:/usr/share/orthanc/curapacs/main.py:ro \
   -v $PWD/orthanc-plugins/curapacs_python:/usr/share/orthanc/curapacs/curapacs_python:ro \

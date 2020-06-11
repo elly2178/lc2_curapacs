@@ -1,10 +1,16 @@
-import provisioner.helpers
-import provisioner.routes
-from provisioner import app
-from provisioner.config import CURAPACS_CONFIG
+from flask import Flask
+from helpers import k8s_config, config
+from routes.instances import OrthancInstancePodList
+from flask_restful import reqparse, abort, Api, Resource
 
+k8s_config.load_kubernetes_config()
+app = Flask(__name__)
+api = Api(app)
+
+api.add_resource(OrthancInstancePodList, '/instances')
 
 def main():
-    app.run(host=CURAPACS_CONFIG["provisioner_host"],
-            port=CURAPACS_CONFIG["provisioner_port"],
-            debug=True)
+    app.run(debug=True)
+
+if __name__ == '__main__':
+    main()
