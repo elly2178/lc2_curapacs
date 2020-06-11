@@ -5,7 +5,7 @@ metadata:
   name: meddream-tokenservice
 spec:
   ports:
-    - name: meddream-tokenservice
+    - name: tokensvc
       protocol: TCP
       port: 80
 ---
@@ -37,7 +37,7 @@ spec:
       paths:
       - backend:
           serviceName: meddream-tokenservice
-          servicePort: meddream-tokenservice
+          servicePort: tokensvc
         path: /
 ---
 apiVersion: apps/v1
@@ -58,3 +58,7 @@ spec:
             - name: meddream-tokenservice-application-properties-vol
               mountPath: /opt/token/application.properties
               subPath: application.properties
+      volumes:
+        - name: meddream-tokenservice-application-properties-vol
+          configMap:
+            name: meddream-tokenservice-application-properties-cm

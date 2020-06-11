@@ -1,2 +1,0 @@
-How will we perform logging?
-Errorhandling (bad Inputs, URIs etc)
